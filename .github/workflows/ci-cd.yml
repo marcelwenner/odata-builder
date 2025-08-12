@@ -36,7 +36,7 @@ jobs:
       is-pr: ${{ github.event_name == 'pull_request' }}
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
@@ -157,7 +157,7 @@ jobs:
             coverage: true
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🔧 Setup Node.js ${{ matrix.node }}
         uses: actions/setup-node@v4
@@ -210,7 +210,7 @@ jobs:
       package-name: ${{ steps.package-info.outputs.name }}
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
@@ -280,7 +280,7 @@ jobs:
       validated: ${{ steps.validate.outputs.valid }}
     steps:
       - name: 📥 Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: 🏷️ Validate Version Consistency
         id: validate
@@ -338,7 +338,7 @@ jobs:
       url: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}
     steps:
       - name: 📥 Checkout (for package files)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           sparse-checkout: |
             package.json
