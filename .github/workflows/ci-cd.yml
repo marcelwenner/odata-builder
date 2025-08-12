@@ -372,7 +372,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: 📥 Download Build Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: build-artifacts-${{ github.run_id }}
           path: ./dist
