@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
@@ -97,7 +97,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
@@ -160,7 +160,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔧 Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
@@ -213,7 +213,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
@@ -366,7 +366,7 @@ jobs:
           echo "✅ All required files present after sparse checkout"
 
       - name: 🔧 Setup Node.js for NPM
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           registry-url: 'https://registry.npmjs.org'
