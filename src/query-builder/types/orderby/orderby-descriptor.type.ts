@@ -5,6 +5,7 @@ export interface OrderByDescriptor<T> {
     orderDirection: 'asc' | 'desc';
 }
 
+ 
 export type OrderByFields<T, Depth extends number = 5> = [Depth] extends [never]
     ? never
     : {
@@ -16,6 +17,6 @@ export type OrderByFields<T, Depth extends number = 5> = [Depth] extends [never]
                     | K
                     | (string extends OrderByFields<T[K], PrevDepth<Depth>>
                           ? never
-                          : `${K}/${OrderByFields<T[K], PrevDepth<Depth>> & string}`)
+                          : `${K}/${OrderByFields<T[K], PrevDepth<Depth>>}`)
               : K;
       }[Extract<keyof T, string>];

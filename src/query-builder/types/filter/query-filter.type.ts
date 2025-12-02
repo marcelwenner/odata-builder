@@ -273,6 +273,7 @@ export type StringQueryFilter<T> =
 
 export type NumberQueryFilter<T> =
     | StandardFilter<T, number>
+    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
     | Extract<
           ComparisonFunctionFilterGenerator<T, number>,
           { function: ArithmeticFunctionDefinition<T> }
