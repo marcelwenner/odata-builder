@@ -23,7 +23,6 @@
         "build:verify": "node scripts/verify-build.js",
         "lint": "eslint --fix src/**",
         "format": "prettier --write --parser typescript '**/*.ts'",
-        "generate-changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
         "test": "vitest",
         "test:cov": "vitest run --coverage",
         "coverage:ci": "vitest --coverage --run"
@@ -57,7 +56,6 @@
         "@typescript-eslint/eslint-plugin": "^8.48.0",
         "@typescript-eslint/parser": "^8.48.0",
         "@vitest/coverage-v8": "^4.0.14",
-        "conventional-changelog-cli": "^5.0.0",
         "eslint": "^9.29.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.4",

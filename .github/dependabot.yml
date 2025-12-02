@@ -61,7 +61,6 @@ updates:
         patterns:
           - "rollup*"
           - "ts-node"
-          - "conventional-changelog*"
         update-types:
           - "minor"
           - "patch"
