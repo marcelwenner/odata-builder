@@ -23,7 +23,6 @@
         "build:verify": "node scripts/verify-build.js",
         "lint": "eslint --fix src/**",
         "format": "prettier --write --parser typescript '**/*.ts'",
-        "generate-changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
         "test": "vitest",
         "test:cov": "vitest run --coverage",
         "coverage:ci": "vitest --coverage --run"
@@ -53,18 +52,18 @@
     },
     "devDependencies": {
         "@rollup/plugin-terser": "^0.4.4",
-        "@rollup/plugin-typescript": "^12.1.1",
-        "@typescript-eslint/eslint-plugin": "^8.17.0",
-        "@typescript-eslint/parser": "^8.17.0",
-        "@vitest/coverage-v8": "^3.2.3",
-        "conventional-changelog-cli": "^5.0.0",
+        "@rollup/plugin-typescript": "^12.3.0",
+        "@typescript-eslint/eslint-plugin": "^8.48.0",
+        "@typescript-eslint/parser": "^8.48.0",
+        "@vitest/coverage-v8": "^4.0.14",
         "eslint": "^9.29.0",
-        "eslint-config-prettier": "^10.0.1",
-        "eslint-plugin-prettier": "^5.2.2",
-        "prettier": "^3.4.2",
-        "rollup-plugin-dts": "^6.1.1",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-prettier": "^5.5.4",
+        "prettier": "^3.7.3",
+        "rollup-plugin-dts": "^6.3.0",
         "ts-node": "^10.9.2",
-        "typescript": "^5.7.3",
-        "vitest": "^3.2.3"
+        "tslib": "^2.8.1",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.14"
     }
 }
