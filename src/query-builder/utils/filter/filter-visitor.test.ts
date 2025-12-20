@@ -1,5 +1,10 @@
 import { ODataFilterVisitor } from './filter-visitor';
-import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
+import {
+    HasFilter,
+    InFilter,
+    NegatedFilter,
+    QueryFilter,
+} from 'src/query-builder/types/filter/query-filter.type';
 import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
 import { describe, beforeEach, it, expect } from 'vitest';
 
@@ -98,7 +103,7 @@ describe('ODataFilterVisitor', () => {
             const filter: QueryFilter<ItemType> = {
                 field: 'tags',
                 lambdaOperator: 'any',
-                expression: { field: '', operator: 'eq', value: '123' },
+                expression: { field: 's', operator: 'eq', value: '123' },
             };
 
             const result = visitor.visitLambdaFilter<ItemType>(filter);
@@ -107,15 +112,20 @@ describe('ODataFilterVisitor', () => {
         });
 
         it('should handle a lambda filter with a field in the expression', () => {
-            const filter: QueryFilter<ItemType> = {
-                field: 'tags',
+            type ItemWithObjectArray = {
+                items: { id: string; name: string }[];
+            };
+            const objectVisitor = new ODataFilterVisitor<ItemWithObjectArray>();
+            const filter: QueryFilter<ItemWithObjectArray> = {
+                field: 'items',
                 lambdaOperator: 'any',
                 expression: { field: 'id', operator: 'eq', value: '123' },
             };
 
-            const result = visitor.visitLambdaFilter<ItemType>(filter);
+            const result =
+                objectVisitor.visitLambdaFilter<ItemWithObjectArray>(filter);
 
-            expect(result).toBe("tags/any(s: s/id eq '123')");
+            expect(result).toBe("items/any(s: s/id eq '123')");
         });
 
         it('should throw an error for an invalid lambda filter', () => {
@@ -189,9 +199,9 @@ describe('ODataFilterVisitor', () => {
                         field: 'tags',
                         lambdaOperator: 'any',
                         expression: {
-                            field: '',
                             operator: 'eq',
                             value: '123',
+                            field: 's',
                         },
                     },
                     {
@@ -400,5 +410,335 @@ describe('ODataFilterVisitor with Functions', () => {
                 "(age add 10 eq 30 and isActive eq true and concat(details/name, 'Hello') eq 'Hello John')",
             );
         });
+    });
+});
+
+describe('ODataFilterVisitor with in operator', () => {
+    type ItemType = {
+        status: string;
+        age: number;
+        name: string;
+    };
+
+    describe('visitInFilter - OData 4.01 syntax', () => {
+        let visitor: ODataFilterVisitor<ItemType>;
+
+        beforeEach(() => {
+            visitor = new ODataFilterVisitor<ItemType>();
+        });
+
+        it('should handle in filter with string values', () => {
+            const filter: InFilter = {
+                field: 'status',
+                operator: 'in',
+                values: ['active', 'pending'],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("status in ('active', 'pending')");
+        });
+
+        it('should handle in filter with number values', () => {
+            const filter: InFilter = {
+                field: 'age',
+                operator: 'in',
+                values: [18, 21, 65],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe('age in (18, 21, 65)');
+        });
+
+        it('should escape single quotes in string values', () => {
+            const filter: InFilter = {
+                field: 'name',
+                operator: 'in',
+                values: ["O'Reilly", "McDonald's"],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("name in ('O''Reilly', 'McDonald''s')");
+        });
+
+        it('should handle null values', () => {
+            const filter: InFilter = {
+                field: 'status',
+                operator: 'in',
+                values: ['active', null],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("status in ('active', null)");
+        });
+
+        it('should handle negative numbers', () => {
+            const filter: InFilter = {
+                field: 'age',
+                operator: 'in',
+                values: [-1, 0, 1],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe('age in (-1, 0, 1)');
+        });
+    });
+
+    describe('visitInFilter - Legacy OData 4.0 syntax', () => {
+        let visitor: ODataFilterVisitor<ItemType>;
+
+        beforeEach(() => {
+            visitor = new ODataFilterVisitor<ItemType>({ legacyInOperator: true });
+        });
+
+        it('should use or fallback for string values', () => {
+            const filter: InFilter = {
+                field: 'status',
+                operator: 'in',
+                values: ['active', 'pending'],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("(status eq 'active' or status eq 'pending')");
+        });
+
+        it('should use or fallback for number values', () => {
+            const filter: InFilter = {
+                field: 'age',
+                operator: 'in',
+                values: [18, 21],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe('(age eq 18 or age eq 21)');
+        });
+
+        it('should escape single quotes in legacy mode', () => {
+            const filter: InFilter = {
+                field: 'name',
+                operator: 'in',
+                values: ["O'Reilly"],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("(name eq 'O''Reilly')");
+        });
+
+        it('should handle null in legacy mode', () => {
+            const filter: InFilter = {
+                field: 'status',
+                operator: 'in',
+                values: ['active', null],
+            };
+
+            const result = visitor.visitInFilter(filter);
+
+            expect(result).toBe("(status eq 'active' or status eq null)");
+        });
+    });
+});
+
+describe('ODataFilterVisitor with not operator', () => {
+    type ItemType = {
+        name: string;
+        age: number;
+        isActive: boolean;
+    };
+
+    let visitor: ODataFilterVisitor<ItemType>;
+
+    beforeEach(() => {
+        visitor = new ODataFilterVisitor<ItemType>();
+    });
+
+    it('should negate a simple filter', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: { field: 'name', operator: 'eq', value: 'John' },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe("not (name eq 'John')");
+    });
+
+    it('should negate a combined filter', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: {
+                logic: 'and',
+                filters: [
+                    { field: 'name', operator: 'eq', value: 'John' },
+                    { field: 'age', operator: 'gt', value: 18 },
+                ],
+            },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe("not ((name eq 'John' and age gt 18))");
+    });
+
+    it('should negate an in filter', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: {
+                field: 'name',
+                operator: 'in',
+                values: ['John', 'Jane'],
+            },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe("not (name in ('John', 'Jane'))");
+    });
+
+    it('should negate a contains filter', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: {
+                field: 'name',
+                function: { type: 'contains', value: 'test' },
+                operator: 'eq',
+                value: true,
+            },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe("not (contains(name, 'test'))");
+    });
+
+    it('should handle double negation', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: {
+                type: 'not',
+                filter: { field: 'isActive', operator: 'eq', value: true },
+            },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe('not (not (isActive eq true))');
+    });
+
+    it('should negate a has filter', () => {
+        const filter: NegatedFilter<ItemType> = {
+            type: 'not',
+            filter: {
+                field: 'name',
+                operator: 'has',
+                value: "Sales.Color'Yellow'",
+            },
+        };
+
+        const result = visitor.visitNegatedFilter(filter);
+
+        expect(result).toBe("not (name has Sales.Color'Yellow')");
+    });
+});
+
+describe('ODataFilterVisitor with has operator', () => {
+    type ItemType = {
+        style: string;
+        color: string;
+        permissions: string;
+    };
+
+    let visitor: ODataFilterVisitor<ItemType>;
+
+    beforeEach(() => {
+        visitor = new ODataFilterVisitor<ItemType>();
+    });
+
+    it('should handle has filter with namespace-qualified enum literal', () => {
+        const filter: HasFilter<ItemType> = {
+            field: 'style',
+            operator: 'has',
+            value: "Sales.Color'Yellow'",
+        };
+
+        const result = visitor.visitHasFilter(filter);
+
+        expect(result).toBe("style has Sales.Color'Yellow'");
+    });
+
+    it('should pass value through unchanged (raw passthrough)', () => {
+        const filter: HasFilter<ItemType> = {
+            field: 'permissions',
+            operator: 'has',
+            value: "Namespace.Permission'Read,Write'",
+        };
+
+        const result = visitor.visitHasFilter(filter);
+
+        expect(result).toBe("permissions has Namespace.Permission'Read,Write'");
+    });
+
+    it('should handle simple enum values', () => {
+        const filter: HasFilter<ItemType> = {
+            field: 'color',
+            operator: 'has',
+            value: 'Red',
+        };
+
+        const result = visitor.visitHasFilter(filter);
+
+        expect(result).toBe('color has Red');
+    });
+
+    it('should handle has filter in combined filter', () => {
+        const filter: CombinedFilter<ItemType> = {
+            logic: 'and',
+            filters: [
+                {
+                    field: 'style',
+                    operator: 'has',
+                    value: "Sales.Color'Yellow'",
+                },
+                {
+                    field: 'permissions',
+                    operator: 'has',
+                    value: "Namespace.Permission'Read'",
+                },
+            ],
+        };
+
+        const result = visitor.visitCombinedFilter(filter);
+
+        expect(result).toBe(
+            "(style has Sales.Color'Yellow' and permissions has Namespace.Permission'Read')",
+        );
+    });
+
+    it('should handle has filter combined with basic filter', () => {
+        const filter: CombinedFilter<ItemType> = {
+            logic: 'or',
+            filters: [
+                {
+                    field: 'color',
+                    operator: 'eq',
+                    value: 'Blue',
+                },
+                {
+                    field: 'style',
+                    operator: 'has',
+                    value: "Sales.Color'Yellow'",
+                },
+            ],
+        };
+
+        const result = visitor.visitCombinedFilter(filter);
+
+        expect(result).toBe("(color eq 'Blue' or style has Sales.Color'Yellow')");
     });
 });

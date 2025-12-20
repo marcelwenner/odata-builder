@@ -1,4 +1,4 @@
-import { OrderByDescriptor } from 'src/query-builder/types/orderby/orderby-descriptor.type';
+import { OrderByDescriptor } from '../../types/orderby/orderby-descriptor.type';
 
 export const toOrderByQuery = <T>(orderBy: OrderByDescriptor<T>[]) => {
     if (!orderBy || orderBy.length === 0) return '';

@@ -1,7 +1,47 @@
 import { describe, it, expectTypeOf } from 'vitest';
 import { ExpandFields } from './expand-fields.type';
 
+// ============================================================================
+// Interface definitions for testing
+// This tests the colleague's issue with interface properties
+// ============================================================================
+
+interface Address {
+    street: string;
+    city: string;
+}
+
+interface Company {
+    name: string;
+    location: Address;
+}
+
+interface User {
+    id: number;
+    name: string;
+    address: Address;
+    company: Company;
+}
+
 describe('ExpandFields<T>', () => {
+    describe('with interface types', () => {
+        it('should work with interface properties', () => {
+            expectTypeOf<ExpandFields<User>>().toEqualTypeOf<
+                | 'address'
+                | 'company'
+                | 'company/location'
+            >();
+        });
+
+        it('should handle nested interface references', () => {
+            expectTypeOf<ExpandFields<Company>>().toEqualTypeOf<'location'>();
+        });
+
+        it('should not include primitive-only interfaces', () => {
+            expectTypeOf<ExpandFields<Address>>().toEqualTypeOf<never>();
+        });
+    });
+
     it('should allow top-level expandable fields', () => {
         type Item = {
             navigation: { id: string };

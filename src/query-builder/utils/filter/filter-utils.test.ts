@@ -99,7 +99,15 @@ describe('toFilterQuery', () => {
             {
                 field: 'tags',
                 lambdaOperator: 'any',
-                expression: { field: '', operator: 'contains', value: 'test' },
+                expression: {
+                    field: 's',
+                    function: {
+                        type: 'contains',
+                        value: 'test',
+                    },
+                    operator: 'eq',
+                    value: 'true',
+                },
             },
         ];
 
@@ -121,7 +129,7 @@ describe('toFilterQuery', () => {
                     field: 'name',
                     operator: 'eq',
                     value: 'Apple',
-                } as QueryFilter<{ name: string; quantity: number }>, // Typ explizit angeben
+                },
             },
         ];
 
@@ -134,9 +142,13 @@ describe('toFilterQuery', () => {
         const filters: QueryFilter<ItemType>[] = [
             {
                 field: 'name',
-                operator: 'contains',
-                value: 'test',
+                function: {
+                    type: 'contains',
+                    value: 'test',
+                },
                 ignoreCase: true,
+                operator: 'eq',
+                value: true,
             },
         ];
 
@@ -187,13 +199,13 @@ describe('toFilterQuery', () => {
                     field: 'tags',
                     lambdaOperator: 'any',
                     expression: {
-                        field: '',
+                        field: 's',
                         function: {
-                            type: '',
-                            value: ['test'],
+                            type: 'contains',
+                            value: 'test',
                         },
                         operator: 'eq',
-                        value: 'true',
+                        value: true,
                     },
                 },
             ];

@@ -1,4 +1,4 @@
-import { Guid } from 'src';
+import { Guid } from '../../types/utils/util.types';
 
 export const operatorTypeMap: Record<string, string[]> = {
     string: [
@@ -49,8 +49,11 @@ export const getValueType = (value: unknown): string => {
     return 'unknown';
 };
 
+/**
+ * Checks if a value is a valid GUID/UUID in canonical format.
+ * Accepts all UUID versions (v1-v8) per RFC 9562.
+ * OData doesn't validate UUID version - only the format matters.
+ */
 export const isGuid = (val: unknown): val is Guid =>
     typeof val === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-        val,
-    );
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);

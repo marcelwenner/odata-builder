@@ -1,14 +1,24 @@
 import { CombinedFilter } from '../../types/filter/combined-filter.type';
 
 import { isCombinedFilter } from './combined-filter-util';
-import { isBasicFilter } from './filter-utils';
-import { getValueType, isValidOperator } from './filter-helper.util';
+import {
+    isBasicFilter,
+    isInFilter,
+    isNegatedFilter,
+    isHasFilter,
+    FilterRenderContext,
+} from './filter-utils';
+import { getValueType, isGuid, isValidOperator } from './filter-helper.util';
 import {
     ArithmeticFunctionDefinition,
     ArrayElement,
     ArrayFields,
     DateTransform,
     FieldReference,
+    HasFilter,
+    InFilter,
+    InFilterValue,
+    NegatedFilter,
     QueryFilter,
     SupportedFunction,
 } from '../../types/filter/query-filter.type';
@@ -17,9 +27,13 @@ interface FilterVisitor<T> {
     visitBasicFilter(filter: QueryFilter<T>): string;
     visitLambdaFilter(filter: QueryFilter<T>, prefix?: string): string;
     visitCombinedFilter(filter: CombinedFilter<T>, prefix?: string): string;
+    visitInFilter(filter: InFilter): string;
+    visitNegatedFilter(filter: NegatedFilter<T>): string;
+    visitHasFilter(filter: HasFilter<T>): string;
 }
 
 export class ODataFilterVisitor<T> implements FilterVisitor<T> {
+    constructor(private readonly context: FilterRenderContext = {}) {}
     visitBasicFilter<U>(filter: QueryFilter<U>): string {
         if (!('value' in filter)) {
             throw new Error('Invalid BasicFilter: missing "value" property');
@@ -68,16 +82,36 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                     ? filter.value.toLowerCase()
                     : filter.value;
 
-            const value = filter.removeQuotes
+            const value =
+                'removeQuotes' in filter && filter.removeQuotes
                 ? transformedValue
                 : `'${transformedValue}'`;
 
-            const leftSide =
-                'function' in filter && filter.function
-                    ? this.processFunction(filter.function, filter.field)
-                    : transformedField;
+            if ('function' in filter && filter.function) {
+                const fieldForFunction =
+                    'ignoreCase' in filter && filter.ignoreCase
+                        ? `tolower(${String(filter.field)})`
+                        : String(filter.field);
 
-            return `${leftSide} ${filter.operator} ${value}`;
+                const booleanPredicates = [
+                    'contains',
+                    'startswith',
+                    'endswith',
+                ];
+                if (booleanPredicates.includes(filter.function.type)) {
+                    return this.processFunction(
+                        filter.function,
+                        fieldForFunction,
+                    );
+                }
+                const leftSide = this.processFunction(
+                    filter.function,
+                    fieldForFunction,
+                );
+                return `${leftSide} ${filter.operator} ${value}`;
+            }
+
+            return `${transformedField} ${filter.operator} ${value}`;
         }
 
         if (typeof filter.value === 'number') {
@@ -86,6 +120,34 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                     ? this.processFunction(filter.function, filter.field)
                     : transformedField;
             return `${leftSide} ${filter.operator} ${filter.value}`;
+        }
+
+        if (typeof filter.value === 'boolean') {
+            if ('function' in filter && filter.function) {
+                const func = filter.function;
+                const booleanPredicates = [
+                    'contains',
+                    'startswith',
+                    'endswith',
+                ];
+                if ('type' in func && booleanPredicates.includes(func.type)) {
+                    const fieldForFunction =
+                        'ignoreCase' in filter && filter.ignoreCase
+                            ? `tolower(${String(filter.field)})`
+                            : String(filter.field);
+                    const funcWithLowercasedValue =
+                        'ignoreCase' in filter &&
+                        filter.ignoreCase &&
+                        'value' in func &&
+                        typeof func.value === 'string'
+                            ? { ...func, value: func.value.toLowerCase() }
+                            : func;
+                    return this.processFunction(
+                        funcWithLowercasedValue,
+                        fieldForFunction,
+                    );
+                }
+            }
         }
 
         return `${transformedField} ${filter.operator} ${String(filter.value)}`;
@@ -173,6 +235,29 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                         currentPrefix,
                     );
                 }
+                if (isInFilter(subFilter)) {
+                    const prefixedFilter = {
+                        ...subFilter,
+                        field: this.getPrefixedField(
+                            subFilter.field,
+                            currentPrefix,
+                        ),
+                    } as InFilter;
+                    return this.visitInFilter(prefixedFilter);
+                }
+                if (isNegatedFilter(subFilter)) {
+                    return this.visitNegatedFilter(subFilter as NegatedFilter<U>);
+                }
+                if (isHasFilter(subFilter)) {
+                    const prefixedFilter = {
+                        ...subFilter,
+                        field: this.getPrefixedField(
+                            subFilter.field,
+                            currentPrefix,
+                        ),
+                    } as HasFilter<U>;
+                    return this.visitHasFilter(prefixedFilter);
+                }
                 if (isBasicFilter(subFilter)) {
                     const prefixedFilter = {
                         ...subFilter,
@@ -194,7 +279,75 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
             : combinedQueries;
     }
 
-    private getTransformedField<U>(filter: QueryFilter<U>): string {
+    visitInFilter(filter: InFilter): string {
+        const field = String(filter.field);
+        const formattedValues = filter.values.map(v =>
+            this.formatInValue(v),
+        );
+
+        if (this.context.legacyInOperator) {
+            // OData 4.0 fallback: (field eq v1 or field eq v2 or ...)
+            const conditions = formattedValues.map(v => `${field} eq ${v}`);
+            return `(${conditions.join(' or ')})`;
+        }
+
+        // OData 4.01: field in (v1, v2, ...)
+        return `${field} in (${formattedValues.join(', ')})`;
+    }
+
+    visitNegatedFilter<U>(filter: NegatedFilter<U>): string {
+        const innerFilter = filter.filter;
+
+        let innerQuery: string;
+        if (isCombinedFilter(innerFilter)) {
+            innerQuery = this.visitCombinedFilter(innerFilter);
+        } else if (isNegatedFilter(innerFilter)) {
+            innerQuery = this.visitNegatedFilter(innerFilter);
+        } else if (isInFilter(innerFilter)) {
+            innerQuery = this.visitInFilter(innerFilter);
+        } else if (isHasFilter(innerFilter)) {
+            innerQuery = this.visitHasFilter(innerFilter);
+        } else if (isLambdaFilter(innerFilter as QueryFilter<U>)) {
+            innerQuery = this.visitLambdaFilter(innerFilter as QueryFilter<U>);
+        } else if (isBasicFilter(innerFilter)) {
+            innerQuery = this.visitBasicFilter(innerFilter as QueryFilter<U>);
+        } else {
+            throw new Error(
+                `Invalid filter inside not(): ${JSON.stringify(innerFilter)}`,
+            );
+        }
+
+        // Always use parentheses to ensure correct precedence
+        return `not (${innerQuery})`;
+    }
+
+    visitHasFilter<U>(filter: HasFilter<U>): string {
+        // Raw passthrough - the value is expected to be a valid OData enum literal
+        // e.g., "Sales.Color'Yellow'" or just the enum value as per server requirements
+        return `${filter.field} has ${filter.value}`;
+    }
+
+    private formatInValue(value: InFilterValue): string {
+        if (value === null) {
+            return 'null';
+        }
+        if (typeof value === 'string') {
+            if (isGuid(value)) {
+                return value;
+            }
+            // Escape single quotes: O'Reilly → 'O''Reilly'
+            return `'${value.replace(/'/g, "''")}'`;
+        }
+        if (value instanceof Date) {
+            return value.toISOString();
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        throw new Error(`Unsupported value type in 'in' filter: ${typeof value}`);
+    }
+
+    private getTransformedField<U>(filter: Exclude<QueryFilter<U>, NegatedFilter<U>>): string {
         // Alle definierten Transformationen zusammenfassen
         const transforms = [
             ...('ignoreCase' in filter && filter.ignoreCase ? ['tolower'] : []),
@@ -345,6 +498,8 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
     ): string {
         const fieldStr = String(field);
         if (!prefix) return fieldStr;
+        if (fieldStr === 's') return prefix;
+        if (fieldStr === prefix) return fieldStr;
         return fieldStr ? `${prefix}/${fieldStr}` : prefix;
     }
 

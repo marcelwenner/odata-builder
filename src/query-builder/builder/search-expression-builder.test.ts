@@ -122,7 +122,7 @@ describe('SearchExpressionBuilder - Extended Edge Cases', () => {
             ['term with /', 'term/'],
             ['term with \\', 'term\\'],
             ['phrase with special chars', 'phrase with +-=!@#$%^*?_./\\'],
-        ])('should handle special characters in %s', (description, input) => {
+        ])('should handle special characters in %s', (_description, input) => {
             const builder = new SearchExpressionBuilder().term(input);
             expect(builder.toString()).toBe(input); // Terms are not quoted, so special chars should be as is.
         });

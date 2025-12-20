@@ -5,166 +5,270 @@ Generate Typesafe OData Queries with Ease. odata-builder ensures your queries ar
 [![build and test](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml/badge.svg?branch=main)](https://github.com/nbyx/odata-builder/actions/workflows/ci-cd.yml)
 [![npm version](https://badge.fury.io/js/odata-builder.svg)](https://www.npmjs.com/package/odata-builder)
 
+> **What you get**
+>
+> -   Fully type-safe OData v4.01 query generation
+> -   Compile-time validation for filters and search expressions
+> -   Fluent builder and serializable object syntax
+>
+> **What you need to know**
+>
+> -   `in()` requires OData 4.01 (legacy fallback available)
+> -   `has()` requires a valid OData enum literal (raw passthrough)
+> -   Server support for `not` may vary
+
 ## Install
 
-Install odata-builder using your preferred package manager:
-
-```javascript
+```bash
 npm install --save odata-builder
 ```
 
 or
 
-```javascript
+```bash
 yarn add odata-builder
 ```
 
-## Usage
+## Quick Start
 
-Effortlessly create queries with typesafe objects:
+```typescript
+import { OdataQueryBuilder } from 'odata-builder';
 
-```javascript
-const item = {
-    someProperty: 'someValue',
+interface User {
+    name: string;
+    age: number;
 }
 
-const queryBuilder = new OdataQueryBuilder<typeof item>()
-    .count()
-    .filter({field: 'someProperty', operator: 'eq', value: 'test'})
-    .skip(10)
-    .top(100)
-    .select('someOtherProperty1', 'someOtherProperty2')
+new OdataQueryBuilder<User>()
+    .filter(f => f.where(x => x.name.eq('John')))
+    .select('name', 'age')
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .top(10)
     .toQuery();
-//  ^ ?$count=true&$filter=someProperty eq 'test'&$skip=10&$top=100&$select=someOtherProperty1, someOtherProperty2
+// ?$filter=name eq 'John'&$select=name,age&$orderby=name asc&$top=10
 ```
 
-### Count and Data Retrieval
+---
 
-For counting and data retrieval:
+## Filter Syntax
 
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .count(true)
-    .filter(...) // only for demonstrating the count
+odata-builder offers two equivalent ways to build filters - both with full IntelliSense and type safety:
+
+| Approach          | Style                    |
+| ----------------- | ------------------------ |
+| **FilterBuilder** | Fluent, chainable        |
+| **Object Syntax** | Declarative, data-driven |
+
+Both produce identical OData queries. The FilterBuilder internally creates the same filter objects, making them fully interchangeable.
+
+---
+
+### FilterBuilder
+
+```typescript
+// Complex filter with AND/OR
+new OdataQueryBuilder<User>()
+    .filter(f =>
+        f
+            .where(x => x.name.contains('John'))
+            .and(x => x.age.gt(18))
+            .or(x => x.isActive.isTrue()),
+    )
     .toQuery();
-//  ^ /$count?$filter=....
+// ?$filter=((contains(name, 'John') and age gt 18) or isActive eq true)
+
+// Array filtering with lambda expressions
+new OdataQueryBuilder<User>()
+    .filter(f => f.where(x => x.tags.any(t => t.s.eq('admin'))))
+    .toQuery();
+// ?$filter=tags/any(s: s eq 'admin')
 ```
 
-### Querying with GUID:
+### Object Syntax
 
-Decide on the inclusion of single quotes in GUID queries:
-
-```javascript
-import { Guid, OdataQueryBuilder } from 'odata-builder';
-
-// You could type your id directly as guid
-type MyAwesomeDto = {
-    id: Guid;
-    ...
-}
-
-const filter = {
-    field: 'id',
-    operator: 'eq'
-    value: 'f92477a9-5761-485a-b7cd-30561e2f888b', // must be guid
-    removeQuotes: true, // if not defined the guid will be added to the query with single quotes
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter(filter)
-    .toQuery();
-//  ^ ?$filter=id eq some-guid
-
-```
-
-### Lambda Expressions for Array Filtering:
-
-Utilize lambda expressions for filtering array fields:
-
-```javascript
-type MyAwesomeDto = {
-    ...
-    someProperty: string[]
-    ...
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter({
-        field: 'someProperty',
-        operator: 'contains',
-        value: 'test',
-        lambdaOperator: 'any',
-        ignoreCase: true,
-    })
-    .toQuery();
-//  ^ ?$filter=someProperty/any(s: contains(tolower(s), 'test'));
-```
-
-### Filtering Objects in Arrays:
-
-Filter within arrays of objects:
-
-```javascript
-type MyAwesomeDto = {
-    ...
-    someProperty: { someInnerProperty: string }[]
-    ...
-}
-
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter({
-        field: 'someProperty',
-        operator: 'contains',
-        value: 'test',
-        lambdaOperator: 'any',
-        innerProperty: 'someInnerProperty', // <-- you will also get autocomplete for this property
-        ignoreCase: true,
-    })
-    .toQuery();
-//  ^ ?$filter=someProperty/any(s: contains(tolower(s/someInnerProperty), 'test'));
-
-```
-
-### Combined Filters:
-
-Combine multiple filters:
-
-```javascript
- const queryBuilder = new ODataQueryBuilder<MyAwesomeDto>
+```typescript
+// Complex filter with AND/OR
+new OdataQueryBuilder<User>()
     .filter({
         logic: 'or',
         filters: [
-            { field: 'x', operator: 'eq', value: 'test' },
-            { field: 'y', operator: 'eq', value: 5 },
+            {
+                logic: 'and',
+                filters: [
+                    { field: 'name', operator: 'contains', value: 'John' },
+                    { field: 'age', operator: 'gt', value: 18 },
+                ],
+            },
+            { field: 'isActive', operator: 'eq', value: true },
         ],
     })
     .toQuery();
-//  ^ ?$filter=(x eq test or y eq 5)
-```
+// ?$filter=((contains(name, 'John') and age gt 18) or isActive eq true)
 
-### Full-Text Search Queries:
-
-Full-text search allows you to query textual data efficiently. Use the `search` method for global text searches across multiple fields or for advanced logical search expressions.
-
-#### Simple Search:
-
-You can use a raw string for basic search functionality:
-
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .search('simple search term')
+// Array filtering with lambda expressions
+new OdataQueryBuilder<User>()
+    .filter({
+        field: 'tags',
+        operator: 'eq',
+        value: 'admin',
+        lambdaOperator: 'any',
+    })
     .toQuery();
-//  ^ ?$search=simple%20search%20term
+// ?$filter=tags/any(s: s eq 'admin')
 ```
 
-#### Advanced Search with SearchExpressionBuilder:
+---
 
-For more complex search requirements, use the SearchExpressionBuilder to construct logical expressions.
+## Key Features
 
-```javascript
+### `in` Operator
+
+Membership testing for values in a list (OData 4.01):
+
+```typescript
+new OdataQueryBuilder<User>()
+    .filter(f => f.where(x => x.name.in(['John', 'Jane', 'Bob'])))
+    .toQuery();
+// ?$filter=name in ('John', 'Jane', 'Bob')
+
+// For OData 4.0 servers: use legacyInOperator option
+new OdataQueryBuilder<User>({ legacyInOperator: true })
+    .filter(f => f.where(x => x.name.in(['John', 'Jane'])))
+    .toQuery();
+// ?$filter=(name eq 'John' or name eq 'Jane')
+```
+
+### `not` Operator
+
+Negate any filter expression:
+
+```typescript
+new OdataQueryBuilder<User>()
+    .filter(f => f.where(x => x.name.contains('test')).not())
+    .toQuery();
+// ?$filter=not (contains(name, 'test'))
+
+new OdataQueryBuilder<User>()
+    .filter(f =>
+        f
+            .where(x => x.name.eq('John'))
+            .and(x => x.age.gt(18))
+            .not(),
+    )
+    .toQuery();
+// ?$filter=not ((name eq 'John' and age gt 18))
+```
+
+> **Note**: `not()` always negates the entire current filter expression, not just the last condition.
+
+### `has` Operator
+
+Check for enum flag values:
+
+```typescript
+new OdataQueryBuilder<Product>()
+    .filter(f => f.where(x => x.style.has("Sales.Color'Yellow'")))
+    .toQuery();
+// ?$filter=style has Sales.Color'Yellow'
+```
+
+> **Important**: `has()` does not validate enum literals. You must provide a valid OData enum literal (e.g. `Namespace.EnumType'Value'`). The value is passed through unchanged.
+
+---
+
+## Advanced Filtering
+
+### String Operations
+
+```typescript
+// Case-insensitive contains
+f.where(x => x.name.ignoreCase().contains('john'));
+// contains(tolower(name), 'john')
+
+// String transforms
+f.where(x => x.name.tolower().trim().eq('john'));
+// trim(tolower(name)) eq 'john'
+
+// String functions
+f.where(x => x.name.length().gt(5));
+// length(name) gt 5
+
+f.where(x => x.name.substring(0, 3).eq('Joh'));
+// substring(name, 0, 3) eq 'Joh'
+```
+
+### Number Operations
+
+```typescript
+// Arithmetic
+f.where(x => x.price.mul(1.1).lt(100));
+// price mul 1.1 lt 100
+
+// Rounding
+f.where(x => x.score.round().eq(5));
+// round(score) eq 5
+```
+
+### Date Operations
+
+```typescript
+// Extract date parts
+f.where(x => x.createdAt.year().eq(2024));
+// year(createdAt) eq 2024
+
+f.where(x => x.createdAt.month().ge(6));
+// month(createdAt) ge 6
+```
+
+### Lambda Expressions
+
+Filter array fields with `any` and `all`:
+
+```typescript
+// Simple array
+new OdataQueryBuilder<User>()
+    .filter({
+        field: 'tags',
+        operator: 'contains',
+        value: 'test',
+        lambdaOperator: 'any',
+        ignoreCase: true,
+    })
+    .toQuery();
+// ?$filter=tags/any(s: contains(tolower(s), 'test'))
+
+// Array of objects
+new OdataQueryBuilder<User>()
+    .filter({
+        field: 'addresses',
+        operator: 'eq',
+        value: 'Berlin',
+        lambdaOperator: 'any',
+        innerProperty: 'city',
+    })
+    .toQuery();
+// ?$filter=addresses/any(s: s/city eq 'Berlin')
+```
+
+---
+
+## Search
+
+### Simple Search
+
+```typescript
+new OdataQueryBuilder<User>().search('simple search term').toQuery();
+// ?$search=simple%20search%20term
+```
+
+### SearchExpressionBuilder
+
+For complex search requirements:
+
+```typescript
 import { SearchExpressionBuilder } from 'odata-builder';
 
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
+new OdataQueryBuilder<User>()
     .search(
         new SearchExpressionBuilder()
             .term('red')
@@ -178,188 +282,116 @@ const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
             ),
     )
     .toQuery();
-//  ^ ?$search=(red%20AND%20blue%20OR%20(green%20AND%20(NOT%20yellow)))
+// ?$search=(red%20AND%20blue%20OR%20(green%20AND%20(NOT%20yellow)))
 ```
 
-#### Combining Search with Other Parameters:
-
-`search` can be combined seamlessly with other query parameters:
-
-```javascript
-const queryBuilder = new OdataQueryBuilder<MyAwesomeDto>()
-    .filter({ field: 'isActive', operator: 'eq', value: true })
-    .orderBy({ field: 'name', orderDirection: 'asc' })
-    .top(20)
-    .search(
-        new SearchExpressionBuilder()
-            .term('keyword')
-            .and()
-            .phrase('exact phrase'),
-    )
-    .toQuery();
-//  ^ ?$filter=isActive eq true&$orderby=name asc&$top=20&$search=keyword%20AND%20%22exact%20phrase%22
-```
-
-### SearchExpressionBuilder Methods
-
-The `SearchExpressionBuilder` provides methods to build logical search expressions. Here's an overview of its core methods:
-
-#### **1. `term`**
-Adds a single search term to the expression.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().term('keyword');
-    // ^ keyword
-    ```
-
-- **Behavior**: A single word without quotes.
-
-#### **2. `phrase`**
-Adds a phrase (multiple words) as a single search entity, enclosed in quotes.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().phrase('exact match');
-    // ^ "exact match"
-    ```
-
-- **Behavior**: Ensures the entire phrase is treated as a single unit.
-
-#### **3. `and` / `or`**
-Adds logical operators to combine multiple terms or phrases.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().term('red').and().term('blue');
-    // ^ red AND blue
-    ```
-
-#### **4. `not`**
-Negates a search expression.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().not(new SearchExpressionBuilder().term('red'));
-    // ^ NOT red
-    ```
-
-#### **5. `group`**
-Groups a search expression to control logical precedence.
-
-- **Example**:
-    ```javascript
-    new SearchExpressionBuilder().group(
-        new SearchExpressionBuilder().term('red').or().term('blue')
-    );
-    // ^ (red OR blue)
-    ```
+**Methods**: `term()`, `phrase()`, `and()`, `or()`, `not()`, `group()`
 
 ---
 
-### `build` vs `toString`
+## Query Options
 
-#### **`build`**
-- Returns the raw structure of the search expression as an array of parts.
-- Useful for debugging or extending the search logic programmatically.
+### select
 
-- **Example**:
-    ```javascript
-    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
-    console.log(builder.build());
-    // ^ [ 'red', 'AND', 'blue' ]
-    ```
+Choose which properties to return. Supports nested paths:
 
-#### **`toString`**
-- Converts the search expression into a properly formatted query string.
-- Used when appending the search to an OData query.
-
-- **Example**:
-    ```javascript
-    const builder = new SearchExpressionBuilder().term('red').and().term('blue');
-    console.log(builder.toString());
-    // ^ red AND blue
-    ```
-
-#### Why Use SearchExpressionBuilder?
-
-The SearchExpressionBuilder provides:
-
-- **Logical Operators**: Combine search terms using `AND`, `OR`, and `NOT`.
-- **Grouping**: Use nested expressions for advanced search logic.
-- **Type Safety**: Get compile-time validation for all search expressions.
-
-### Function Encapsulation:
-
-Encapsulate query creation:
-
-```javascript
-const item = {
-    x: 4,
-    y: 'test',
-    z: new Date(Date.now()),
-};
-
-const testFn = (
-    field: FilterFields<typeof item, string>, // you can use that type to get only the fields with type string
-    operator: FilterOperators<string>, // only allows filter operators for the given type
-    value: string, // you should use the type that you have defined in the FilterFields type
-): string => {
-    const queryBuilder = new OdataQueryBuilder<typeof item>();
-
-    queryBuilder.filter({ field, operator, value });
-
-    return queryBuilder.toQuery();
-};
-
-const result = testFn('y', 'eq', 'test');
-//  ^ ?$filter=y eq 'test'
-```
-
-### Property Expansion:
-
-Expand properties in queries:
-
-```javascript
-const item = {
-    x: { someProperty: '' },
-}
-const queryBuilder = new OdataQueryBuilder<typeof item>();
-    .expand('x')
+```typescript
+new OdataQueryBuilder<User>()
+    .select('name', 'address/city', 'address/zip')
     .toQuery();
-//  ^ ?expand=x
+// ?$select=name,address/city,address/zip
 ```
 
-You can do this with inner properties as well:
+### expand
 
-```javascript
-const item = {
-    x: { someProperty: { nestedProperty: '' } },
-}
-const queryBuilder = new OdataQueryBuilder<typeof item>();
-    .expand('x/someProperty') // you will get autocomplete for these properties
+Include related entities. Supports nested paths:
+
+```typescript
+new OdataQueryBuilder<User>().expand('company', 'company/address').toQuery();
+// ?$expand=company,company/address
+```
+
+### orderBy
+
+Sort results:
+
+```typescript
+new OdataQueryBuilder<User>()
+    .orderBy({ field: 'name', orderDirection: 'asc' })
+    .orderBy({ field: 'age', orderDirection: 'desc' })
     .toQuery();
-//  ^ ?expand=x/someProperty
+// ?$orderby=name asc,age desc
 ```
 
-# Features
+### top / skip
 
-- Generate oData4 queries with typesafe objects.
-    - Check of field, value and possible operator for a filter
-    - Orderby, Select only fields of your model
-    - **Autocomplete** for every property in your filter, orderby, etc...
-    - Filtering of arrays in your model
-    - Filters can be added with strings that will get typechecked
-- Generate Queries to manipluate data (soon™)
+Pagination:
 
-# ToDos
+```typescript
+new OdataQueryBuilder<User>().top(10).skip(20).toQuery();
+// ?$top=10&$skip=20
+```
 
-- [x] Add **select** query
-- [x] Add **orderby** with order direction asc or desc
-- [x] Add single **filter** support with lambda expressions
-- [x] Add expand support
-- [ ] Add odata function support (partially done)
-- [x] Add search support
-- [ ] Add support for data modification queries with odata
+### count
+
+Include total count:
+
+```typescript
+new OdataQueryBuilder<User>().count().toQuery();
+// ?$count=true
+
+// Count endpoint only
+new OdataQueryBuilder<User>().count(true).toQuery();
+// /$count
+```
+
+---
+
+## GUID Handling
+
+```typescript
+import { Guid, OdataQueryBuilder } from 'odata-builder';
+
+interface Entity {
+    id: Guid;
+}
+
+new OdataQueryBuilder<Entity>()
+    .filter({
+        field: 'id',
+        operator: 'eq',
+        value: 'f92477a9-5761-485a-b7cd-30561e2f888b',
+        removeQuotes: true,
+    })
+    .toQuery();
+// ?$filter=id eq f92477a9-5761-485a-b7cd-30561e2f888b
+```
+
+> Most OData servers accept GUIDs without quotes. If your server requires quoted GUIDs, omit `removeQuotes`.
+
+---
+
+## Server Compatibility
+
+| Feature        | OData Version | Notes                          |
+| -------------- | ------------- | ------------------------------ |
+| `in` operator  | 4.01          | Use `legacyInOperator` for 4.0 |
+| `not` operator | 4.0+          | Some servers have limited support |
+| `has` operator | 4.0+          | Requires correct enum literal  |
+
+Check your server's `$metadata` endpoint or try a feature probe query. If `in` returns 400, switch to legacy mode.
+
+---
+
+## Design Principles
+
+-   Type safety over runtime validation
+-   Explicit over implicit behavior
+-   Server compatibility over clever syntax
+-   No hidden query rewriting
+
+---
+
+## Contributing
 
 Your contributions are welcome! If there's a feature you'd like to see in odata-builder, or if you encounter any issues, please feel free to open an issue or submit a pull request.

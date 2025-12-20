@@ -1,4 +1,4 @@
-import { CombinedFilter } from 'src/query-builder/types/filter/combined-filter.type';
+import { CombinedFilter } from '../../types/filter/combined-filter.type';
 import { isQueryFilter } from './is-query-filter-util';
 
 export const isCombinedFilter = <T>(

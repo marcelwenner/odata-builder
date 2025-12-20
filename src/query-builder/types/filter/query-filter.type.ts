@@ -3,13 +3,16 @@ import { CombinedFilter } from './combined-filter.type';
 
 export type QueryFilter<T> =
     | StringQueryFilter<T>
+    | StringPredicateQueryFilter<T>
     | NumberQueryFilter<T>
     | DateQueryFilter<T>
     | GuidQueryFilter<T>
     | BooleanQueryFilter<T>
-    | LambdaFilter<T>;
+    | LambdaFilter<T>
+    | InFilter
+    | NegatedFilter<T>
+    | HasFilter<T>;
 
-// String-Filter
 interface StringQueryFilter<T> extends BaseFilter<T, string> {
     operator: StringFilterOperators;
     ignoreCase?: boolean;
@@ -18,48 +21,152 @@ interface StringQueryFilter<T> extends BaseFilter<T, string> {
     transform?: StringTransform[];
 }
 
-// Number-Filter
+/**
+ * String filter with boolean predicate function (contains, startswith, endswith)
+ * These functions return boolean, so value is boolean not string
+ * Example: contains(name, 'test') eq true
+ */
+interface StringPredicateQueryFilter<T> {
+    field: FilterFields<T, string>;
+    operator: GeneralFilterOperators;
+    value: boolean | null;
+    ignoreCase?: boolean;
+    function: {
+        type: 'contains' | 'startswith' | 'endswith';
+        value: string | FieldReference<T, string>;
+    };
+}
+
 interface NumberQueryFilter<T> extends BaseFilter<T, number> {
     operator: NumberFilterOperators | GeneralFilterOperators;
     function?: ArithmeticFunctionDefinition<T>;
     transform?: NumberTransform[];
 }
 
-// Date-Filter
 interface DateQueryFilter<T> extends BaseFilter<T, Date> {
     operator: DateFilterOperators | GeneralFilterOperators;
     function?: DateFunctionDefinition<T>;
     transform?: DateTransform[];
 }
 
-// Guid-Filter
 interface GuidQueryFilter<T> extends BaseFilter<T, Guid> {
     operator: GeneralFilterOperators;
     removeQuotes?: boolean;
     transform?: GuidTransform[];
 }
 
-// Boolean-Filter
 interface BooleanQueryFilter<T> extends BaseFilter<T, boolean> {
     operator: GeneralFilterOperators;
 }
 
-// Base Filter
+/**
+ * Filter for membership testing using 'in' operator (OData 4.01)
+ * Example: Name in ('A', 'B', 'C')
+ */
+export interface InFilter {
+    field: string;
+    operator: 'in';
+    values: InFilterValue[];
+}
+
+export type InFilterValue = string | number | boolean | Date | Guid | null;
+
+/**
+ * Negated filter using 'not' operator
+ * Example: not (contains(Name, 'test'))
+ * Example: not (Age gt 18)
+ */
+export interface NegatedFilter<T> {
+    type: 'not';
+    filter: QueryFilter<T> | CombinedFilter<T>;
+}
+
+/**
+ * Filter for enum flag checking using 'has' operator
+ * Example: Style has Sales.Color'Yellow'
+ *
+ * Note: The value must be a valid OData enum literal,
+ * typically in format Namespace.EnumType'Value'
+ * The library does not validate or modify the enum literal.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface HasFilter<_T> {
+    field: string;
+    operator: 'has';
+    value: string;
+}
+
 interface BaseFilter<T, V> {
     field: FilterFields<T, V>;
     operator: FilterOperators<V>;
     value: V | null;
 }
+type PrimitiveArrayElementModel<V> = {
+    s: V;
+};
 
 type LambdaFilter<T> = {
     [K in ArrayFields<T>]: {
         field: K;
         lambdaOperator: 'any' | 'all';
-        expression:
-            | QueryFilter<ArrayElement<T, K>>
-            | CombinedFilter<ArrayElement<T, K>>;
+        expression: ArrayElement<T, K> extends object
+            ?
+                  | QueryExpression<ArrayElement<T, K>>
+                  | CombinedQueryExpression<ArrayElement<T, K>>
+            :
+                  | QueryExpression<
+                        PrimitiveArrayElementModel<ArrayElement<T, K>>
+                    >
+                  | CombinedQueryExpression<
+                        PrimitiveArrayElementModel<ArrayElement<T, K>>
+                    >;
     };
 }[ArrayFields<T>];
+
+export type QueryExpression<
+    T,
+    F extends SupportedFunction<T> | undefined = undefined,
+> = F extends { type: 'now' }
+    ? {
+          field: FilterFields<T, Date>;
+          function: F;
+          operator?: never;
+          value?: never;
+      }
+    : F extends { type: 'length' }
+      ? {
+            field: FilterFields<T, string>;
+            function: F;
+            operator: FilterOperators<number>;
+            value: number | null;
+        }
+      : F extends { type: 'indexof' }
+        ? {
+              field: FilterFields<T, string>;
+              function: F;
+              operator: FilterOperators<number>;
+              value: number | null;
+          }
+        : F extends { type: 'substring' }
+          ? {
+                field: FilterFields<T, string>;
+                function: F;
+                operator: FilterOperators<string>;
+                value: string | null;
+            }
+          : F extends { type: 'contains' }
+            ? {
+                  field: FilterFields<T, string>;
+                  function: F;
+                  operator?: FilterOperators<boolean> | undefined;
+                  value?: boolean | null | undefined;
+              }
+            : QueryFilter<T>;
+
+export type CombinedQueryExpression<T> = {
+    logic: 'and' | 'or';
+    filters: Array<QueryExpression<T> | CombinedQueryExpression<T>>;
+};
 
 export type SpecificFunctionDefinition<T, V> = V extends string
     ? StringFunctionDefinition<T>
@@ -134,7 +241,9 @@ export type ArrayFields<T> = {
 
 export type ArrayElement<T, K extends ArrayFields<T>> = T[K] extends (infer U)[]
     ? U
-    : never;
+    : T[K] extends readonly (infer U)[]
+      ? U
+      : never;
 
 export type FilterFields<T, VALUETYPE> = {
     [K in Extract<keyof T, string>]: T[K] extends Record<string, unknown>

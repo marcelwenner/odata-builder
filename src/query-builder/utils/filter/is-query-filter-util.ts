@@ -1,4 +1,4 @@
-import { QueryFilter } from 'src/query-builder/types/filter/query-filter.type';
+import { QueryFilter } from '../../types/filter/query-filter.type';
 import { isCombinedFilter } from './combined-filter-util';
 import {
     getValueType,
@@ -23,6 +23,38 @@ export const isQueryFilter = <T>(filter: unknown): filter is QueryFilter<T> => {
         );
     }
 
+    // Prüfung für In-Filter (has 'values' array instead of single 'value')
+    if (
+        'field' in f &&
+        'operator' in f &&
+        f['operator'] === 'in' &&
+        'values' in f &&
+        Array.isArray(f['values'])
+    ) {
+        return true;
+    }
+
+    // Prüfung für Negated-Filter
+    if (
+        'type' in f &&
+        f['type'] === 'not' &&
+        'filter' in f &&
+        (isQueryFilter(f['filter']) || isCombinedFilter(f['filter']))
+    ) {
+        return true;
+    }
+
+    // Prüfung für Has-Filter
+    if (
+        'field' in f &&
+        'operator' in f &&
+        f['operator'] === 'has' &&
+        'value' in f &&
+        typeof f['value'] === 'string'
+    ) {
+        return true;
+    }
+
     // Prüfung für Basic-Filter
     if ('field' in f && 'operator' in f && 'value' in f) {
         const valueType = getValueType(f['value']);
@@ -40,5 +72,5 @@ export const isQueryFilter = <T>(filter: unknown): filter is QueryFilter<T> => {
         return true;
     }
 
-    return false;
+    return false
 };
