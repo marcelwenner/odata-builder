@@ -207,9 +207,9 @@ describe('FilterFields<T, VALUETYPE>', () => {
 
     it('should not allow filtering on object fields directly', () => {
         type Item = { details: { code: string } };
+        // @ts-expect-error - Cannot filter on object field directly, invalid operator for object type
         const filter: QueryFilter<Item> = {
             field: 'details',
-            // @ts-expect-error - Cannot filter on object field directly, invalid operator for object type
             operator: 'eq',
             value: { code: 'test' },
         };
@@ -421,13 +421,13 @@ describe('QueryFilter<T> with functions', () => {
         };
         assertType<QueryFilter<ItemType>>(validFilter);
 
+        // @ts-expect-error - Invalid operator for string function return type
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
                 type: 'contains',
                 value: 'Hello',
             },
             field: 'name',
-            // @ts-expect-error - Invalid operator for string function return type
             operator: 'gt',
             value: true,
         };
@@ -451,13 +451,12 @@ describe('QueryFilter<T> with functions', () => {
 
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type (price is number, startswith is for strings)
                 type: 'startswith',
+                // @ts-expect-error - Field does not match function return type (price is number, startswith is for strings)
                 value: 'Test',
             },
             field: 'price',
             operator: 'eq',
-            // @ts-expect-error - value type mismatch
             value: 'true',
         };
         void invalidFilter;
@@ -466,8 +465,8 @@ describe('QueryFilter<T> with functions', () => {
     // Edge Cases
     it('should handle empty function values gracefully', () => {
         type ItemType = { name: string };
+        // @ts-expect-error - Missing required function properties (concat needs values array)
         const invalidFilter: QueryFilter<ItemType> = {
-            // @ts-expect-error - Missing required function properties (concat needs values array)
             function: {
                 type: 'concat',
             },
@@ -482,13 +481,12 @@ describe('QueryFilter<T> with functions', () => {
         type ItemType = { name: string; price: number };
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not support string function (concat on number field)
                 type: 'concat',
+                // @ts-expect-error - Field does not support string function (concat on number field)
                 values: ['Hello', 'World'],
             },
             field: 'price',
             operator: 'eq',
-            // @ts-expect-error - value type mismatch
             value: 'HelloWorld',
         };
         void invalidFilter;
@@ -520,12 +518,12 @@ describe('QueryFilter<T> with functions', () => {
         };
         assertType<QueryFilter<ItemType>>(validFilter);
 
+        // @ts-expect-error - Invalid operator for date function return type
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
                 type: 'now',
             },
             field: 'createdAt',
-            // @ts-expect-error - Invalid operator for date function return type
             operator: 'contains',
             value: new Date(),
         };
@@ -549,13 +547,12 @@ describe('QueryFilter<T> with functions', () => {
 
         const invalidStringFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type (concat on number field)
                 type: 'concat',
+                // @ts-expect-error - Field does not match function return type (concat on number field)
                 values: ['Hello', { fieldReference: 'name' }],
             },
             field: 'price',
             operator: 'eq',
-            // @ts-expect-error - value type mismatch
             value: 'Hello World',
         };
         void invalidStringFilter;
@@ -571,15 +568,14 @@ describe('QueryFilter<T> with functions', () => {
         };
         assertType<QueryFilter<ItemType>>(validNumberFilter);
 
+        // @ts-expect-error - Field does not match function return type (add on string field)
         const invalidNumberFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type (add on string field)
                 type: 'add',
                 operand: 10,
             },
             field: 'name',
             operator: 'eq',
-            // @ts-expect-error - value type mismatch
             value: 110,
         };
         void invalidNumberFilter;
@@ -588,8 +584,8 @@ describe('QueryFilter<T> with functions', () => {
     // Edge Cases
     it('should handle empty function values gracefully', () => {
         type ItemType = { name: string };
+        // @ts-expect-error - Missing required function properties (empty function object)
         const invalidFilter: QueryFilter<ItemType> = {
-            // @ts-expect-error - Missing required function properties (empty function object)
             function: {},
             field: 'name',
             operator: 'eq',
@@ -600,15 +596,14 @@ describe('QueryFilter<T> with functions', () => {
 
     it('should not allow functions for fields without matching types', () => {
         type ItemType = { name: string; price: number };
+        // @ts-expect-error - 'add' is not valid for string field
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - 'add' is not valid for string field
                 type: 'add',
                 operand: 10,
             },
             field: 'name',
             operator: 'eq',
-            // @ts-expect-error - value type mismatch (number instead of string)
             value: 10,
         };
         void invalidFilter;

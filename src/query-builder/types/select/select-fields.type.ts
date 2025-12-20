@@ -19,6 +19,8 @@ import { IsObjectType, PrevDepth } from '../utils/util.types';
  * type Fields = SelectFields<User>;
  * // 'name' | 'address' | 'address/city' | 'address/zip'
  */
+ 
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 export type SelectFields<T, Depth extends number = 5> = [Depth] extends [never]
     ? never
     : {
@@ -35,3 +37,4 @@ export type SelectFields<T, Depth extends number = 5> = [Depth] extends [never]
                           : `${K}/${SelectFields<NonNullable<T[K]>, PrevDepth<Depth>> & string}`)
               : K;
       }[Extract<keyof T, string>];
+/* eslint-enable @typescript-eslint/no-redundant-type-constituents */

@@ -1,0 +1,96 @@
+name: 'Dependabot Auto-Merge'
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  dependabot-auto-merge:
+    name: 'Auto-merge Dependabot PRs'
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: 'Check PR Details'
+        id: pr-check
+        run: |
+          # Get PR information
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_BODY="${{ github.event.pull_request.body }}"
+          
+          echo "📋 PR Title: $PR_TITLE"
+          echo "🤖 Actor: ${{ github.actor }}"
+          
+          # Determine if this is a safe auto-merge candidate
+          AUTO_MERGE="false"
+          
+          # Auto-merge patch updates (low risk)
+          if [[ "$PR_TITLE" =~ ^chore\(.*\):\ [Bb]ump.*\ from\ [0-9]+\.[0-9]+\.[0-9]+\ to\ [0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "✅ Detected patch update - safe for auto-merge"
+            AUTO_MERGE="true"
+          fi
+          
+          # Auto-merge specific safe packages
+          if [[ "$PR_TITLE" =~ (prettier|eslint-|@types/) ]]; then
+            echo "✅ Detected safe package update - approved for auto-merge"
+            AUTO_MERGE="true"
+          fi
+          
+          # Auto-merge GitHub Actions updates (they're usually safe)
+          if [[ "$PR_TITLE" =~ ^ci.*actions/ ]]; then
+            echo "✅ Detected GitHub Actions update - safe for auto-merge"
+            AUTO_MERGE="true"
+          fi
+          
+          # Never auto-merge major version updates
+          if [[ "$PR_TITLE" =~ [0-9]+\.[0-9]+\.[0-9]+\ to\ [0-9]*[0-9]+\.[0-9]+\.[0-9]+ ]] && [[ ! "$PR_TITLE" =~ [0-9]+\.[0-9]+\.[0-9]+\ to\ [0-9]+\.[0-9]*[0-9]+\.[0-9]+ ]]; then
+            echo "⚠️ Potential major version update detected - manual review required"
+            AUTO_MERGE="false"
+          fi
+          
+          echo "auto_merge=$AUTO_MERGE" >> $GITHUB_OUTPUT
+          echo "🎯 Auto-merge decision: $AUTO_MERGE"
+
+      - name: 'Wait for CI Checks'
+        if: steps.pr-check.outputs.auto_merge == 'true'
+        uses: fountainhead/action-wait-for-check@v1.2.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          checkName: 'Pipeline Status'
+          ref: ${{ github.event.pull_request.head.sha }}
+          timeoutSeconds: 1800  # 30 minutes max wait
+          intervalSeconds: 30
+
+      - name: 'Auto-approve PR'
+        if: steps.pr-check.outputs.auto_merge == 'true'
+        run: |
+          echo "🤖 Auto-approving dependabot PR..."
+          gh pr review "${{ github.event.pull_request.number }}" --approve --body "🤖 Auto-approved: Safe dependency update detected. All CI checks passed."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Auto-merge PR'
+        if: steps.pr-check.outputs.auto_merge == 'true'
+        run: |
+          echo "🚀 Auto-merging dependabot PR..."
+          gh pr merge "${{ github.event.pull_request.number }}" --squash --delete-branch
+          echo "✅ Successfully auto-merged dependabot PR"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 'Manual Review Required'
+        if: steps.pr-check.outputs.auto_merge == 'false'
+        run: |
+          echo "⏸️ This PR requires manual review"
+          echo "Reasons for manual review:"
+          echo "- Major version update detected"
+          echo "- Critical package update"
+          echo "- Complex dependency change"
+          echo ""
+          echo "Please review the changes manually before merging."

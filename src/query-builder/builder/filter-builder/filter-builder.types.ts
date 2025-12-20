@@ -183,6 +183,8 @@ export type PrimitiveArrayWrapper<V> = { s: V };
  * Uses [V] extends [...] pattern to prevent distributive conditional types
  * This ensures literal unions like 'open' | 'closed' are preserved as-is
  */
+ 
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 type FieldOperationsFor<
     TRoot,
     V,
@@ -204,6 +206,7 @@ type FieldOperationsFor<
               : [V] extends [object]
                 ? NestedFieldProxy<TRoot, V>
                 : never;
+/* eslint-enable @typescript-eslint/no-redundant-type-constituents */
 
 /**
  * NestedFieldProxy for accessing nested object properties while preserving the root type

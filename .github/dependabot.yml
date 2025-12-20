@@ -1,15 +1,118 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
+# Dependabot configuration for automated dependency management
 # https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 
 version: 2
 updates:
-  - package-ecosystem: "npm" # Für Node.js Projekte
+  # NPM Dependencies - Production Critical
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
     commit-message:
       prefix: "chore"
+      prefix-development: "chore(dev)"
+      include: "scope"
     reviewers:
       - "nbyx"
+    assignees:
+      - "nbyx"
+    labels:
+      - "dependencies"
+      - "automated"
+    # Limit open PRs
+    open-pull-requests-limit: 5
+    # Group related dependencies together
+    groups:
+      # TypeScript and Language Tooling
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "@types/*"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # ESLint and Code Quality
+      eslint:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "prettier"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Testing Framework
+      testing:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "c8"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # Build Tools
+      build-tools:
+        patterns:
+          - "rollup*"
+          - "ts-node"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      # All patch updates (low risk)
+      patch-updates:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    
+    # Version strategies
+    versioning-strategy: increase
+    
+    # Only consider security updates for production dependencies
+    # All dev dependencies get regular updates
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    
+    # Ignore specific packages or versions if needed
+    ignore:
+      # Ignore major version updates for stable packages
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+      # Example: Ignore specific problematic versions
+      # - dependency-name: "example-package"
+      #   versions: ["1.2.3", "1.2.4"]
+
+  # GitHub Actions Updates
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    reviewers:
+      - "nbyx"
+    labels:
+      - "github-actions"
+      - "ci-cd"
+      - "automated"
+    # Group GitHub Actions updates
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    open-pull-requests-limit: 2

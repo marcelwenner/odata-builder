@@ -1,0 +1,79 @@
+name: 'Stale Issues and PRs'
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # Stale issue settings
+          stale-issue-message: |
+            👋 This issue has been automatically marked as stale because it has not had recent activity.
+            
+            **What happens next?**
+            - If this issue is still relevant, please add a comment to keep it active
+            - If no activity occurs within 7 days, this issue will be automatically closed
+            - You can always reopen closed issues if needed
+            
+            Thank you for your contribution to odata-builder! 🚀
+          
+          close-issue-message: |
+            🤖 This issue has been automatically closed due to inactivity.
+            
+            **Don't worry!** You can:
+            - Reopen this issue if it's still relevant
+            - Create a new issue with updated information
+            - Reference this issue in new discussions
+            
+            Thank you for using odata-builder! 📦
+          
+          # Stale PR settings  
+          stale-pr-message: |
+            👋 This pull request has been automatically marked as stale because it has not had recent activity.
+            
+            **What happens next?**
+            - Please update your PR or add a comment if you're still working on this
+            - If no activity occurs within 7 days, this PR will be automatically closed
+            - You can always reopen closed PRs if needed
+            
+            Thank you for your contribution to odata-builder! 🚀
+          
+          close-pr-message: |
+            🤖 This pull request has been automatically closed due to inactivity.
+            
+            **Don't worry!** You can:
+            - Reopen this PR if you're still working on it
+            - Create a new PR with updated changes
+            - Reference this PR in future work
+            
+            Thank you for contributing to odata-builder! 📦
+          
+          # Timing settings
+          days-before-stale: 30        # Mark as stale after 30 days
+          days-before-close: 7         # Close 7 days after marking stale
+          days-before-pr-close: 7      # Close PRs 7 days after marking stale
+          
+          # Label settings
+          stale-issue-label: 'status: stale'
+          stale-pr-label: 'status: stale'
+          
+          # Exempt settings
+          exempt-issue-labels: 'pinned,security,enhancement,bug'
+          exempt-pr-labels: 'pinned,security,work-in-progress'
+          
+          # Only process a limited number to avoid rate limits
+          operations-per-run: 50
+          
+          # Don't mark issues/PRs as stale if they have recent activity
+          exempt-all-assignees: true

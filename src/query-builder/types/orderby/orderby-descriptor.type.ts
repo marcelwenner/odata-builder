@@ -5,6 +5,8 @@ export interface OrderByDescriptor<T> {
     orderDirection: 'asc' | 'desc';
 }
 
+ 
+/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
 export type OrderByFields<T, Depth extends number = 5> = [Depth] extends [never]
     ? never
     : {
@@ -21,3 +23,4 @@ export type OrderByFields<T, Depth extends number = 5> = [Depth] extends [never]
                           : `${K}/${OrderByFields<NonNullable<T[K]>, PrevDepth<Depth>> & string}`)
               : K;
       }[Extract<keyof T, string>];
+/* eslint-enable @typescript-eslint/no-redundant-type-constituents */

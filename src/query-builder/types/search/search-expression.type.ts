@@ -1,13 +1,13 @@
-export type SearchTerm = string & { __type: 'SearchTerm' };
+export type SearchTerm = string & { readonly __brand: 'SearchTerm' };
 
 export interface SearchPhrase {
-    phrase: string;
+    readonly phrase: string;
 }
 
 export type SearchOperator = 'AND' | 'OR' | 'NOT';
 
 export interface SearchGroup {
-    expression: SearchExpression;
+    readonly expression: SearchExpression;
 }
 
 export type SearchExpressionPart =
