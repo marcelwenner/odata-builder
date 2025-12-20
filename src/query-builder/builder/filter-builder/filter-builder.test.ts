@@ -1231,3 +1231,119 @@ describe('OdataQueryBuilder.filter() with FilterBuilder', () => {
         expect(query).toBe("?$filter=not (name has Permission'Admin')");
     });
 });
+
+// ============================================================================
+// OData Compliance: Apostrophe Escaping
+// ============================================================================
+
+describe('FilterBuilder Apostrophe Escaping', () => {
+    it('should escape apostrophes in eq()', () => {
+        const query = new OdataQueryBuilder<TestUser>()
+            .filter(f => f.where(x => x.name.eq("O'Brien")))
+            .toQuery();
+
+        expect(query).toBe("?$filter=name eq 'O''Brien'");
+    });
+
+    it('should escape apostrophes in contains()', () => {
+        const query = new OdataQueryBuilder<TestUser>()
+            .filter(f => f.where(x => x.name.contains("O'Reilly")))
+            .toQuery();
+
+        expect(query).toBe("?$filter=contains(name, 'O''Reilly')");
+    });
+
+    it('should escape apostrophes in startswith()', () => {
+        const query = new OdataQueryBuilder<TestUser>()
+            .filter(f => f.where(x => x.name.startswith("McDonald's")))
+            .toQuery();
+
+        expect(query).toBe("?$filter=startswith(name, 'McDonald''s')");
+    });
+
+    it('should escape multiple apostrophes', () => {
+        const query = new OdataQueryBuilder<TestUser>()
+            .filter(f => f.where(x => x.name.eq("It's John's")))
+            .toQuery();
+
+        expect(query).toBe("?$filter=name eq 'It''s John''s'");
+    });
+
+    it('should escape apostrophes in lambda expressions', () => {
+        const query = new OdataQueryBuilder<TestUser>()
+            .filter(f =>
+                f.where(x => x.tags.any(t => t.s.eq("dev's"))),
+            )
+            .toQuery();
+
+        expect(query).toBe("?$filter=tags/any(s: s eq 'dev''s')");
+    });
+});
+
+// ============================================================================
+// Edge Cases and Error Handling
+// ============================================================================
+
+describe('FilterBuilder Edge Cases', () => {
+    describe('empty FilterBuilder handling', () => {
+        it('where() with empty FilterBuilder returns builder with no filter', () => {
+            const emptyBuilder = new FilterBuilder<TestUser>();
+            const result = new FilterBuilder<TestUser>().where(emptyBuilder);
+            expect(result.build()).toBeNull();
+        });
+
+        it('and() with empty FilterBuilder ignores the empty builder', () => {
+            const builder = new FilterBuilder<TestUser>().where(x =>
+                x.name.eq('John'),
+            );
+            const emptyBuilder = new FilterBuilder<TestUser>();
+            const result = builder.and(emptyBuilder);
+            expect(result.build()).toEqual({
+                field: 'name',
+                operator: 'eq',
+                value: 'John',
+            });
+        });
+
+        it('or() with empty FilterBuilder ignores the empty builder', () => {
+            const builder = new FilterBuilder<TestUser>().where(x =>
+                x.name.eq('John'),
+            );
+            const emptyBuilder = new FilterBuilder<TestUser>();
+            const result = builder.or(emptyBuilder);
+            expect(result.build()).toEqual({
+                field: 'name',
+                operator: 'eq',
+                value: 'John',
+            });
+        });
+    });
+
+    describe('error handling', () => {
+        it('throws when passing non-function non-builder to where()', () => {
+            expect(() => {
+                new FilterBuilder<TestUser>().where(
+                    'invalid' as unknown as FilterBuilder<TestUser>,
+                );
+            }).toThrow('Expected a predicate function');
+        });
+
+        it('throws when passing non-function non-builder to and()', () => {
+            const builder = new FilterBuilder<TestUser>().where(x =>
+                x.name.eq('John'),
+            );
+            expect(() => {
+                builder.and('invalid' as unknown as FilterBuilder<TestUser>);
+            }).toThrow('Expected a predicate function');
+        });
+
+        it('throws when passing non-function non-builder to or()', () => {
+            const builder = new FilterBuilder<TestUser>().where(x =>
+                x.name.eq('John'),
+            );
+            expect(() => {
+                builder.or('invalid' as unknown as FilterBuilder<TestUser>);
+            }).toThrow('Expected a predicate function');
+        });
+    });
+});
