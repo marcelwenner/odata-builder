@@ -742,3 +742,174 @@ describe('ODataFilterVisitor with has operator', () => {
         expect(result).toBe("(color eq 'Blue' or style has Sales.Color'Yellow')");
     });
 });
+
+describe('ODataFilterVisitor Apostrophe Escaping', () => {
+    type TestType = {
+        name: string;
+        description: string;
+    };
+
+    let visitor: ODataFilterVisitor<TestType>;
+
+    beforeEach(() => {
+        visitor = new ODataFilterVisitor<TestType>();
+    });
+
+    it('should escape single quotes in basic string filter', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: "O'Brien",
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("name eq 'O''Brien'");
+    });
+
+    it('should escape multiple apostrophes', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: "It's John's book",
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("name eq 'It''s John''s book'");
+    });
+
+    it('should escape apostrophes in contains() function', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: true,
+            function: { type: 'contains', value: "O'Reilly" },
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("contains(name, 'O''Reilly')");
+    });
+
+    it('should escape apostrophes in startswith() function', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: true,
+            function: { type: 'startswith', value: "McDonald's" },
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("startswith(name, 'McDonald''s')");
+    });
+
+    it('should escape apostrophes in endswith() function', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: true,
+            function: { type: 'endswith', value: "test's" },
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("endswith(name, 'test''s')");
+    });
+
+    it('should escape apostrophes in concat() function', () => {
+        const filter: QueryFilter<TestType> = {
+            field: 'name',
+            operator: 'eq',
+            value: 'result',
+            function: { type: 'concat', values: ["John's", "book"] },
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe("concat(name, 'John''s', 'book') eq 'result'");
+    });
+
+    it('should escape apostrophes in combined filter', () => {
+        const filter: CombinedFilter<TestType> = {
+            logic: 'or',
+            filters: [
+                { field: 'name', operator: 'eq', value: "O'Brien" },
+                { field: 'name', operator: 'eq', value: "O'Reilly" },
+            ],
+        };
+
+        const result = visitor.visitCombinedFilter(filter);
+        expect(result).toBe("(name eq 'O''Brien' or name eq 'O''Reilly')");
+    });
+});
+
+describe('ODataFilterVisitor Error Handling', () => {
+    type TestType = {
+        name: string;
+        count: number;
+        createdAt: Date;
+        isActive: boolean;
+    };
+
+    let visitor: ODataFilterVisitor<TestType>;
+
+    beforeEach(() => {
+        visitor = new ODataFilterVisitor<TestType>();
+    });
+
+    it('should throw on unsupported value type', () => {
+        const filter = {
+            field: 'name',
+            operator: 'eq',
+            value: { invalid: 'object' },
+        } as unknown as QueryFilter<TestType>;
+
+        expect(() => visitor.visitBasicFilter(filter)).toThrow(
+            'Unsupported value type',
+        );
+    });
+
+    it('should throw on invalid operator for type', () => {
+        const filter = {
+            field: 'name',
+            operator: 'invalidOp',
+            value: 'test',
+        } as unknown as QueryFilter<TestType>;
+
+        expect(() => visitor.visitBasicFilter(filter)).toThrow(
+            'Invalid operator',
+        );
+    });
+
+    it('should format Date values correctly', () => {
+        const date = new Date('2024-01-15T10:30:00.000Z');
+        const filter: QueryFilter<TestType> = {
+            field: 'createdAt',
+            operator: 'eq',
+            value: date,
+        };
+
+        const result = visitor.visitBasicFilter(filter);
+        expect(result).toBe('createdAt eq 2024-01-15T10:30:00.000Z');
+    });
+
+    it('should handle Date in combined filter', () => {
+        const date = new Date('2024-06-01T00:00:00.000Z');
+        const filter: CombinedFilter<TestType> = {
+            logic: 'and',
+            filters: [
+                {
+                    field: 'createdAt',
+                    operator: 'gt',
+                    value: date,
+                },
+                {
+                    field: 'isActive',
+                    operator: 'eq',
+                    value: true,
+                },
+            ],
+        };
+
+        const result = visitor.visitCombinedFilter(filter);
+        expect(result).toBe(
+            '(createdAt gt 2024-06-01T00:00:00.000Z and isActive eq true)',
+        );
+    });
+});

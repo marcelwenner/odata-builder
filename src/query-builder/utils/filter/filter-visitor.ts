@@ -82,10 +82,13 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                     ? filter.value.toLowerCase()
                     : filter.value;
 
+            // Escape single quotes for OData (apostrophe -> double apostrophe)
+            const escapedValue = transformedValue.replace(/'/g, "''");
+
             const value =
                 'removeQuotes' in filter && filter.removeQuotes
-                ? transformedValue
-                : `'${transformedValue}'`;
+                ? escapedValue
+                : `'${escapedValue}'`;
 
             if ('function' in filter && filter.function) {
                 const fieldForFunction =
@@ -481,7 +484,8 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
 
     private formatValue(value: unknown): string {
         if (typeof value === 'string') {
-            return `'${value}'`;
+            // Escape single quotes for OData (apostrophe -> double apostrophe)
+            return `'${value.replace(/'/g, "''")}'`;
         }
         if (value instanceof Date) {
             return `${value.toISOString()}`;

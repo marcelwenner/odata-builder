@@ -1,13 +1,13 @@
 {
     "name": "odata-builder",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "odata builder for easier and typesafe usage",
-    "author": "Marcel Wenner (https://github.com/nbyx)",
+    "author": "Marcel Wenner (https://github.com/marcelwenner)",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/nbyx/odata-builder/issues"
+        "url": "https://github.com/marcelwenner/odata-builder/issues"
     },
-    "homepage": "https://github.com/nbyx/odata-builder#readme",
+    "homepage": "https://github.com/marcelwenner/odata-builder#readme",
     "main": "dist/odata-builder.js",
     "module": "dist/odata-builder.esm.js",
     "types": "dist/odata-builder.d.ts",
