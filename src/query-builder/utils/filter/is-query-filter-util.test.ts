@@ -9,7 +9,7 @@ describe('isQueryFilter', () => {
     describe('Basic Filters', () => {
         it.each([
             { field: 'isActive', operator: 'eq', value: true },
-            { field: 'name', operator: 'contains', value: 'test' },
+            { field: 'name', function: { type: 'contains', value: 'test' }, operator: 'eq', value: true },
             { field: 'createdAt', operator: 'gt', value: testDate },
             { field: 'id', operator: 'eq', value: testGuid },
             { field: 'age', operator: 'lt', value: 30 },
@@ -125,9 +125,11 @@ describe('isQueryFilter', () => {
             };
 
             if (isQueryFilter(potentialFilter)) {
-                expect(potentialFilter.value instanceof Date).toBe(true);
+                // Cast to basic filter type since we know this specific filter has a value property
+                const basicFilter = potentialFilter as { value: unknown };
+                expect(basicFilter.value instanceof Date).toBe(true);
                 expect(
-                    (potentialFilter.value as Date).toISOString(),
+                    (basicFilter.value as Date).toISOString(),
                 ).toBeDefined();
             } else {
                 expect.fail(

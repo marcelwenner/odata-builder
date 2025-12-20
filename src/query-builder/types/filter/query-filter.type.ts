@@ -1,393 +1,303 @@
 import { Guid } from '../utils/util.types';
 import { CombinedFilter } from './combined-filter.type';
 
-type PrevDepth<T extends number> = [never, 0, 1, 2, 3, 4, 5][T];
-
-// 1. Funktionsdefinitionen
-export type StringFunctionDefinition<T> =
-    | {
-          readonly type: 'concat';
-          readonly values: ReadonlyArray<string | FieldReference<T, string>>;
-      }
-    | {
-          readonly type: 'contains';
-          readonly value: string | FieldReference<T, string>;
-      }
-    | {
-          readonly type: 'endswith';
-          readonly value: string | FieldReference<T, string>;
-      }
-    | {
-          readonly type: 'indexof';
-          readonly value: string | FieldReference<T, string>;
-      }
-    | { readonly type: 'length' }
-    | {
-          readonly type: 'startswith';
-          readonly value: string | FieldReference<T, string>;
-      }
-    | {
-          readonly type: 'substring';
-          readonly start: number | FieldReference<T, number>;
-          readonly length?: number | FieldReference<T, number>;
-      }
-    | { readonly type: 'tolower' }
-    | { readonly type: 'toupper' }
-    | { readonly type: 'trim' };
-
-export type ArithmeticOperator = 'add' | 'sub' | 'mul' | 'div' | 'mod';
-export type ArithmeticFunctionDefinition<T> =
-    | {
-          readonly type: ArithmeticOperator;
-          readonly operand: number | FieldReference<T, number>;
-      }
-    | { readonly type: 'round' | 'floor' | 'ceiling' };
-
-export type DateFunctionDefinition<T> =
-    | { readonly type: 'now' }
-    | { readonly type: 'date'; readonly field: FieldReference<T, Date> }
-    | { readonly type: 'time'; readonly field: FieldReference<T, Date> }
-    | {
-          readonly type:
-              | 'year'
-              | 'month'
-              | 'day'
-              | 'hour'
-              | 'minute'
-              | 'second';
-      };
-
-export type AnySupportedFunction<T> =
-    | StringFunctionDefinition<T>
-    | ArithmeticFunctionDefinition<T>
-    | DateFunctionDefinition<T>;
-
-type ODataDateStringLiteral = string & { __brand: 'ODataDateStringLiteral' };
-type ODataTimeStringLiteral = string & { __brand: 'ODataTimeStringLiteral' };
-
-// 2. Hilfstyp: FunctionReturnType
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type FunctionReturnType<F extends AnySupportedFunction<any>> =
-    F extends { type: 'length' | 'indexof' }
-        ? number
-        : F extends { type: 'contains' | 'startswith' | 'endswith' }
-          ? boolean
-          : F extends {
-                  type: 'tolower' | 'toupper' | 'trim' | 'substring' | 'concat';
-              }
-            ? string
-            : F extends { type: 'round' | 'floor' | 'ceiling' }
-              ? number
-              : F extends { type: ArithmeticOperator }
-                ? number
-                : F extends {
-                        type:
-                            | 'year'
-                            | 'month'
-                            | 'day'
-                            | 'hour'
-                            | 'minute'
-                            | 'second';
-                    }
-                  ? number
-                  : F extends { type: 'now' }
-                    ? Date
-                    : F extends { type: 'date' }
-                      ? ODataDateStringLiteral
-                      : F extends { type: 'time' }
-                        ? ODataTimeStringLiteral
-                        : never;
-
-// 3. FilterOperatoren
-export type GeneralFilterOperators = 'eq' | 'ne';
-export type ComparisonOperators = 'gt' | 'ge' | 'lt' | 'le';
-export type StringAsFunctionOperators =
-    | 'contains'
-    | 'startswith'
-    | 'endswith'
-    | 'substringof'
-    | 'indexof';
-
-export type StandardStringFilterOperators =
-    | GeneralFilterOperators
-    | StringAsFunctionOperators;
-export type ComparableFilterOperators =
-    | GeneralFilterOperators
-    | ComparisonOperators;
-export type BooleanFilterOperators = GeneralFilterOperators;
-export type GuidFilterOperators = GeneralFilterOperators;
-
-export type FilterOperators<V> = V extends
-    | ODataDateStringLiteral
-    | ODataTimeStringLiteral
-    ? ComparableFilterOperators
-    : V extends Date
-      ? ComparableFilterOperators
-      : V extends number
-        ? ComparableFilterOperators
-        : V extends Guid
-          ? GuidFilterOperators
-          : V extends string
-            ? StandardStringFilterOperators
-            : V extends boolean
-              ? BooleanFilterOperators
-              : GeneralFilterOperators;
-
-// 4. Basis-Interface für Kern-Eigenschaften
-interface BaseFilterCore<T, VFieldType> {
-    readonly field: FilterFields<T, VFieldType>;
-    readonly transform?: ReadonlyArray<PropertyTransform<VFieldType>>;
-}
-
-export type StringFilterOperators =
-    | GeneralFilterOperators
-    | StringAsFunctionOperators
-    | ComparisonOperators;
-
-// 5. Diskriminierte Union für Basis-Filter
-
-// Fall A: Filter ohne explizite OData-Funktion (function Eigenschaft)
-export type StandardFilter<T, VFieldType> = BaseFilterCore<T, VFieldType> &
-    (
-        | {
-              readonly function?: undefined;
-              readonly operator: FilterOperators<VFieldType>;
-              readonly value: VFieldType | null;
-              readonly ignoreCase?: VFieldType extends string ? boolean : never;
-              readonly removeQuotes?: VFieldType extends string | Guid
-                  ? boolean
-                  : never;
-          }
-        | (VFieldType extends string
-              ? {
-                    readonly function: StringFunctionDefinition<T>;
-                    readonly operator: FilterOperators<
-                        FunctionReturnType<StringFunctionDefinition<T>>
-                    >;
-                    readonly value: FunctionReturnType<
-                        StringFunctionDefinition<T>
-                    > | null;
-                    readonly ignoreCase?: never;
-                    readonly removeQuotes?: FunctionReturnType<
-                        StringFunctionDefinition<T>
-                    > extends string
-                        ? boolean
-                        : never;
-                }
-              : never)
-        | (VFieldType extends number
-              ? {
-                    readonly function: ArithmeticFunctionDefinition<T>;
-                    readonly operator: FilterOperators<
-                        FunctionReturnType<ArithmeticFunctionDefinition<T>>
-                    >;
-                    readonly value: FunctionReturnType<
-                        ArithmeticFunctionDefinition<T>
-                    > | null;
-                    readonly ignoreCase?: never;
-                    readonly removeQuotes?: never;
-                }
-              : never)
-        | (VFieldType extends Date
-              ? {
-                    readonly function: DateFunctionDefinition<T>;
-                    readonly operator: FilterOperators<
-                        FunctionReturnType<DateFunctionDefinition<T>>
-                    >;
-                    readonly value: FunctionReturnType<
-                        DateFunctionDefinition<T>
-                    > | null;
-                    readonly ignoreCase?: never;
-                    readonly removeQuotes?: FunctionReturnType<
-                        DateFunctionDefinition<T>
-                    > extends string
-                        ? boolean
-                        : never;
-                }
-              : never)
-    );
-
-// Fall B: Filter MIT expliziter OData-Funktion (function Eigenschaft)
-// B.1: Funktionen, die direkt einen booleschen Ausdruck für OData $filter liefern
-export type DirectBooleanODataFunctionFilter<
-    T,
-    VFieldType extends string,
-> = BaseFilterCore<T, VFieldType> & {
-    readonly function: Extract<
-        StringFunctionDefinition<T>,
-        { type: 'contains' | 'startswith' | 'endswith' }
-    >;
-    readonly operator?: BooleanFilterOperators;
-    readonly value?: boolean | null;
-    readonly ignoreCase?: never;
-    readonly removeQuotes?: never;
-};
-
-// B.2: Funktionen, deren Ergebnis mit Operator und Wert verglichen wird
-type ComparisonFunctionFilter_Internal<
-    T,
-    VFieldType,
-    F extends AnySupportedFunction<T>,
-    FRT,
-> = BaseFilterCore<T, VFieldType> & {
-    readonly function: F;
-    readonly operator: FilterOperators<FRT>;
-    readonly value:
-        | (FRT extends ODataDateStringLiteral | ODataTimeStringLiteral
-              ? string
-              : FRT)
-        | null;
-    readonly ignoreCase?: never;
-    readonly removeQuotes?: FRT extends
-        | ODataDateStringLiteral
-        | ODataTimeStringLiteral
-        | string
-        ? boolean
-        : never;
-};
-
-type ComparisonFunctionFilterGenerator<T, VFieldType> = {
-    [FuncKey in AnySupportedFunction<T>['type']]: FuncKey extends
-        | 'contains'
-        | 'startswith'
-        | 'endswith'
-        ? never
-        : ComparisonFunctionFilter_Internal<
-              T,
-              VFieldType,
-              Extract<AnySupportedFunction<T>, { type: FuncKey }>,
-              FunctionReturnType<
-                  Extract<AnySupportedFunction<T>, { type: FuncKey }>
-              >
-          >;
-}[AnySupportedFunction<T>['type']];
-
-// 6. Spezifische QueryFilter-Typen für jeden Feldtyp
-export type StringQueryFilter<T> =
-    | StandardFilter<T, string>
-    | DirectBooleanODataFunctionFilter<T, string>
-    | Extract<
-          ComparisonFunctionFilterGenerator<T, string>,
-          { function: StringFunctionDefinition<T> }
-      >;
-
-export type NumberQueryFilter<T> =
-    | StandardFilter<T, number>
-    // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
-    | Extract<
-          ComparisonFunctionFilterGenerator<T, number>,
-          { function: ArithmeticFunctionDefinition<T> }
-      >;
-
-export type DateQueryFilter<T> =
-    | StandardFilter<T, Date>
-    | Extract<
-          ComparisonFunctionFilterGenerator<T, Date>,
-          { function: DateFunctionDefinition<T> }
-      >;
-
-export type GuidQueryFilter<T> = StandardFilter<T, Guid>;
-export type BooleanQueryFilter<T> = StandardFilter<T, boolean>;
-
-// 7. Haupt-QueryFilter-Typ
 export type QueryFilter<T> =
     | StringQueryFilter<T>
+    | StringPredicateQueryFilter<T>
     | NumberQueryFilter<T>
     | DateQueryFilter<T>
     | GuidQueryFilter<T>
     | BooleanQueryFilter<T>
-    | LambdaFilter<T>;
+    | LambdaFilter<T>
+    | InFilter
+    | NegatedFilter<T>
+    | HasFilter<T>;
 
-export type PropertyTransform<V> = V extends string
-    ? StringTransform
-    : V extends number
-      ? NumberTransform
-      : V extends Date
-        ? DateTransform
-        : V extends Guid
-          ? GuidTransform
-          : never;
+interface StringQueryFilter<T> extends BaseFilter<T, string> {
+    operator: StringFilterOperators;
+    ignoreCase?: boolean;
+    removeQuotes?: boolean;
+    function?: StringFunctionDefinition<T>;
+    transform?: StringTransform[];
+}
 
-export type LambdaFilter<T> = {
-    readonly [K in ArrayFields<T>]: {
-        readonly field: K;
-        readonly lambdaOperator: 'any' | 'all';
-        readonly expression:
-            | QueryFilter<ArrayElement<T, K>>
-            | CombinedFilter<ArrayElement<T, K>>;
+/**
+ * String filter with boolean predicate function (contains, startswith, endswith)
+ * These functions return boolean, so value is boolean not string
+ * Example: contains(name, 'test') eq true
+ */
+interface StringPredicateQueryFilter<T> {
+    field: FilterFields<T, string>;
+    operator: GeneralFilterOperators;
+    value: boolean | null;
+    ignoreCase?: boolean;
+    function: {
+        type: 'contains' | 'startswith' | 'endswith';
+        value: string | FieldReference<T, string>;
+    };
+}
+
+interface NumberQueryFilter<T> extends BaseFilter<T, number> {
+    operator: NumberFilterOperators | GeneralFilterOperators;
+    function?: ArithmeticFunctionDefinition<T>;
+    transform?: NumberTransform[];
+}
+
+interface DateQueryFilter<T> extends BaseFilter<T, Date> {
+    operator: DateFilterOperators | GeneralFilterOperators;
+    function?: DateFunctionDefinition<T>;
+    transform?: DateTransform[];
+}
+
+interface GuidQueryFilter<T> extends BaseFilter<T, Guid> {
+    operator: GeneralFilterOperators;
+    removeQuotes?: boolean;
+    transform?: GuidTransform[];
+}
+
+interface BooleanQueryFilter<T> extends BaseFilter<T, boolean> {
+    operator: GeneralFilterOperators;
+}
+
+/**
+ * Filter for membership testing using 'in' operator (OData 4.01)
+ * Example: Name in ('A', 'B', 'C')
+ */
+export interface InFilter {
+    field: string;
+    operator: 'in';
+    values: InFilterValue[];
+}
+
+export type InFilterValue = string | number | boolean | Date | Guid | null;
+
+/**
+ * Negated filter using 'not' operator
+ * Example: not (contains(Name, 'test'))
+ * Example: not (Age gt 18)
+ */
+export interface NegatedFilter<T> {
+    type: 'not';
+    filter: QueryFilter<T> | CombinedFilter<T>;
+}
+
+/**
+ * Filter for enum flag checking using 'has' operator
+ * Example: Style has Sales.Color'Yellow'
+ *
+ * Note: The value must be a valid OData enum literal,
+ * typically in format Namespace.EnumType'Value'
+ * The library does not validate or modify the enum literal.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export interface HasFilter<_T> {
+    field: string;
+    operator: 'has';
+    value: string;
+}
+
+interface BaseFilter<T, V> {
+    field: FilterFields<T, V>;
+    operator: FilterOperators<V>;
+    value: V | null;
+}
+type PrimitiveArrayElementModel<V> = {
+    s: V;
+};
+
+type LambdaFilter<T> = {
+    [K in ArrayFields<T>]: {
+        field: K;
+        lambdaOperator: 'any' | 'all';
+        expression: ArrayElement<T, K> extends object
+            ?
+                  | QueryExpression<ArrayElement<T, K>>
+                  | CombinedQueryExpression<ArrayElement<T, K>>
+            :
+                  | QueryExpression<
+                        PrimitiveArrayElementModel<ArrayElement<T, K>>
+                    >
+                  | CombinedQueryExpression<
+                        PrimitiveArrayElementModel<ArrayElement<T, K>>
+                    >;
     };
 }[ArrayFields<T>];
 
-export type FieldReference<T, V extends string | number | Date | boolean> = {
-    readonly fieldReference: FilterFields<T, V>;
+export type QueryExpression<
+    T,
+    F extends SupportedFunction<T> | undefined = undefined,
+> = F extends { type: 'now' }
+    ? {
+          field: FilterFields<T, Date>;
+          function: F;
+          operator?: never;
+          value?: never;
+      }
+    : F extends { type: 'length' }
+      ? {
+            field: FilterFields<T, string>;
+            function: F;
+            operator: FilterOperators<number>;
+            value: number | null;
+        }
+      : F extends { type: 'indexof' }
+        ? {
+              field: FilterFields<T, string>;
+              function: F;
+              operator: FilterOperators<number>;
+              value: number | null;
+          }
+        : F extends { type: 'substring' }
+          ? {
+                field: FilterFields<T, string>;
+                function: F;
+                operator: FilterOperators<string>;
+                value: string | null;
+            }
+          : F extends { type: 'contains' }
+            ? {
+                  field: FilterFields<T, string>;
+                  function: F;
+                  operator?: FilterOperators<boolean> | undefined;
+                  value?: boolean | null | undefined;
+              }
+            : QueryFilter<T>;
+
+export type CombinedQueryExpression<T> = {
+    logic: 'and' | 'or';
+    filters: Array<QueryExpression<T> | CombinedQueryExpression<T>>;
 };
 
-export type ArrayFields<T> = {
-    [K in keyof T]-?: NonNullable<T[K]> extends ReadonlyArray<unknown>
-        ? K
+export type SpecificFunctionDefinition<T, V> = V extends string
+    ? StringFunctionDefinition<T>
+    : V extends number
+      ? ArithmeticFunctionDefinition<T>
+      : V extends Date
+        ? DateFunctionDefinition<T>
         : never;
+
+export type StringFunctionDefinition<T> =
+    | {
+          type: 'concat';
+          values: (string | FieldReference<T, string>)[];
+      }
+    | {
+          type: 'contains';
+          value: string | FieldReference<T, string>;
+      }
+    | {
+          type: 'endswith';
+          value: string | FieldReference<T, string>;
+      }
+    | {
+          type: 'indexof';
+          value: string | FieldReference<T, string>;
+      }
+    | {
+          type: 'length';
+      }
+    | {
+          type: 'startswith';
+          value: string | FieldReference<T, string>;
+      }
+    | {
+          type: 'substring';
+          start: number | FieldReference<T, number>;
+          length?: number | FieldReference<T, number>;
+      };
+
+type ArithmeticOperator = 'add' | 'sub' | 'mul' | 'div' | 'mod';
+
+export type ArithmeticFunctionDefinition<T> = {
+    type: ArithmeticOperator;
+    operand: number | FieldReference<T, number>;
+};
+
+export type DateFunctionDefinition<T> =
+    | {
+          type: 'now';
+      }
+    | {
+          type: 'date';
+          field: FieldReference<T, Date>;
+      }
+    | {
+          type: 'time';
+          field: FieldReference<T, Date>;
+      };
+
+export type FieldReference<T, V extends string | number | Date | boolean> = {
+    fieldReference: FilterFields<T, V>;
+};
+
+export type SupportedFunction<T> =
+    | StringFunctionDefinition<T>
+    | ArithmeticFunctionDefinition<T>
+    | DateFunctionDefinition<T>;
+
+export type ArrayFields<T> = {
+    [K in keyof T]: T[K] extends Array<unknown> ? K : never;
 }[keyof T];
 
-export type ArrayElement<T, K extends ArrayFields<T>> =
-    NonNullable<T[K]> extends ReadonlyArray<infer U> ? U : never;
+export type ArrayElement<T, K extends ArrayFields<T>> = T[K] extends (infer U)[]
+    ? U
+    : T[K] extends readonly (infer U)[]
+      ? U
+      : never;
 
-// Korrigierter Join-Typ
-type Join<K, P> = K extends string | number
-    ? P extends string | number
-        ? P extends ''
-            ? `${K}` // Wenn P leer ist, nur K zurückgeben
-            : K extends ''
-              ? `${P}` // Wenn K leer ist, nur P zurückgeben
-              : `${K}/${P}` // Normal case: K/P
-        : never
-    : never;
-
-type Paths<T, VALUETYPE, D extends number = 5> = D extends 0
-    ? never
-    : {
-          [K in keyof T]-?: K extends string
-              ? NonNullable<T[K]> extends VALUETYPE
+export type FilterFields<T, VALUETYPE> = {
+    [K in Extract<keyof T, string>]: T[K] extends Record<string, unknown>
+        ? T[K] extends VALUETYPE
+            ? K
+            : `${K}/${NestedFilterFields<T[K], VALUETYPE>}`
+        : T[K] extends VALUETYPE | null | undefined
+          ? K
+          : T[K] extends readonly VALUETYPE[]
+            ? K
+            : T[K] extends readonly Record<string, infer INNERVALUE>[]
+              ? INNERVALUE extends VALUETYPE
                   ? K
-                  : NonNullable<T[K]> extends ReadonlyArray<VALUETYPE>
-                    ? K
-                    : NonNullable<T[K]> extends ReadonlyArray<infer U>
-                      ? U extends object
-                          ? VALUETYPE extends U
-                              ? K
-                              : never
-                          : never
-                      : NonNullable<T[K]> extends object
-                        ? VALUETYPE extends NonNullable<T[K]>
-                            ? K
-                            : Join<
-                                  K,
-                                  Paths<
-                                      NonNullable<T[K]>,
-                                      VALUETYPE,
-                                      PrevDepth<D>
-                                  >
-                              >
-                        : never
+                  : never
               : never;
-      }[keyof T];
+}[Extract<keyof T, string>];
 
-export type FilterFields<T, VALUETYPE, Depth extends number = 5> = Paths<
+type NestedFilterFieldsHelper<T, VALUETYPE> =
+    T extends Record<string, unknown>
+        ? {
+              [K in Extract<keyof T, string>]: T[K] extends
+                  | VALUETYPE
+                  | null
+                  | undefined
+                  ? K
+                  : T[K] extends Record<string, unknown>
+                    ? `${K}/${NestedFilterFieldsHelper<Exclude<T[K], undefined>, VALUETYPE>}` extends `${infer P}`
+                        ? P
+                        : never
+                    : never;
+          }[Extract<keyof T, string>]
+        : never;
+
+export type NestedFilterFields<T, VALUETYPE> = NestedFilterFieldsHelper<
     T,
-    VALUETYPE,
-    Depth
+    VALUETYPE
 >;
-
 export type LambdaFilterFields<T, VALUETYPE> = {
-    [K in Extract<keyof T, string>]: NonNullable<T[K]> extends ReadonlyArray<
-        infer U_ITEM
-    >
-        ? U_ITEM extends object
-            ? FilterFields<U_ITEM, VALUETYPE>
+    [K in Extract<keyof T, string>]: T[K] extends readonly (infer TYPE)[]
+        ? TYPE extends object // Nur Arrays von Objekten
+            ? {
+                  [Key in keyof TYPE]: TYPE[Key] extends VALUETYPE
+                      ? Key
+                      : never;
+              }[keyof TYPE] // Extrahiere nur Felder mit VALUETYPE
             : never
         : never;
 }[Extract<keyof T, string>];
 
-export type StringTransform = 'tolower' | 'toupper' | 'trim';
+export type GeneralFilterOperators = 'eq' | 'ne';
+
+export type StringFilterOperators = GeneralFilterOperators;
+
+export type StringTransform = 'tolower' | 'toupper' | 'trim' | 'length';
 export type DateTransform =
     | 'year'
     | 'month'
@@ -397,6 +307,22 @@ export type DateTransform =
     | 'second';
 export type NumberTransform = 'round' | 'floor' | 'ceiling';
 export type GuidTransform = 'tolower';
+
+export type NumberFilterOperators = 'ge' | 'gt' | 'le' | 'lt';
+
+type DateFilterOperators = NumberFilterOperators;
+
+export type DependentFilterOperators<VALUETYPE> = VALUETYPE extends string
+    ? StringFilterOperators
+    : VALUETYPE extends number
+      ? NumberFilterOperators
+      : VALUETYPE extends Date
+        ? DateFilterOperators
+        : never;
+
+export type FilterOperators<VALUETYPE> =
+    | GeneralFilterOperators
+    | DependentFilterOperators<VALUETYPE>;
 
 export interface FilterVisitor<T> {
     visitQueryFilter(filter: QueryFilter<T>): string;

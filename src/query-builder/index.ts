@@ -2,7 +2,15 @@ import { OrderByDescriptor } from './types/orderby/orderby-descriptor.type';
 import { QueryFilter } from './types/filter/query-filter.type';
 import { toOrderByQuery } from './utils/orderby/orderby-utils';
 import { toSelectQuery } from './utils/select/select-utils';
-import { isBasicFilter, toFilterQuery } from './utils/filter/filter-utils';
+import {
+    isBasicFilter,
+    isLambdaFilter,
+    isInFilter,
+    isNegatedFilter,
+    isHasFilter,
+    toFilterQuery,
+    FilterRenderContext,
+} from './utils/filter/filter-utils';
 import { CombinedFilter } from './types/filter/combined-filter.type';
 import { ExpandFields } from './types/expand/expand-fields.type';
 import { toExpandQuery } from './utils/expand/expand-util';
@@ -10,399 +18,460 @@ import { toTopQuery } from './utils/top/top-utils';
 import { toSkipQuery } from './utils/skip/skip-utils';
 import { QueryComponents } from './types/utils/util.types';
 import { SearchExpressionBuilder } from './builder/search-expression-builder';
+import { createSearchTerm } from './utils/search/search.utils';
 import { isCombinedFilter } from './utils/filter/combined-filter-util';
 import {
     getValueType,
     isValidOperator,
 } from './utils/filter/filter-helper.util';
-import { isQueryFilter } from './utils/filter/is-query-filter-util';
+import { FilterBuilder } from './builder/filter-builder/filter-builder';
+import { SelectFields } from './types/select/select-fields.type';
 
 const countEntitiesQuery = '/$count';
 
-function isValidSearchInput(
-    value: unknown,
-): value is string | SearchExpressionBuilder {
-    return (
-        typeof value === 'string' || value instanceof SearchExpressionBuilder
-    );
+/**
+ * Options for OdataQueryBuilder
+ */
+export interface OdataQueryBuilderOptions {
+    /**
+     * Use legacy 'or' fallback for 'in' operator (for OData 4.0 servers)
+     * Default: false (uses OData 4.01 'in' syntax)
+     *
+     * @example
+     * // OData 4.01 (default): name in ('A', 'B')
+     * // Legacy (4.0): (name eq 'A' or name eq 'B')
+     */
+    legacyInOperator?: boolean;
 }
 
-function isValidOrderByDescriptor<T>(
-    descriptor: OrderByDescriptor<T>,
-): boolean {
-    return (
-        descriptor !== null &&
-        typeof descriptor === 'object' &&
-        'field' in descriptor &&
-        typeof descriptor.field === 'string' &&
-        descriptor.field.trim() !== '' &&
-        (!('orderDirection' in descriptor) ||
-            descriptor.orderDirection === 'asc' ||
-            descriptor.orderDirection === 'desc')
-    );
-}
-
+/**
+ * Type-safe OData query builder for constructing OData v4.01 query strings.
+ *
+ * Supports all major OData query options: $filter, $select, $expand, $orderby,
+ * $top, $skip, $count, and $search.
+ *
+ * @typeParam T - The entity type to build queries for
+ *
+ * @example
+ * // Basic query with filter and select
+ * const query = new OdataQueryBuilder<User>()
+ *     .filter(f => f.where(x => x.isActive.isTrue()))
+ *     .select('name', 'email')
+ *     .top(10)
+ *     .toQuery();
+ * // "?$filter=isActive eq true&$top=10&$select=name, email"
+ *
+ * @example
+ * // Complex filter with type-safe field access
+ * new OdataQueryBuilder<User>()
+ *     .filter(f => f
+ *         .where(x => x.name.contains('John'))
+ *         .and(x => x.age.gt(18))
+ *         .or(x => x.tags.any(t => t.s.eq('admin')))
+ *     )
+ *     .toQuery();
+ *
+ * @example
+ * // Using in() operator (OData 4.01)
+ * new OdataQueryBuilder<User>()
+ *     .filter(f => f.where(x => x.status.in(['active', 'pending'])))
+ *     .toQuery();
+ * // "?$filter=status in ('active', 'pending')"
+ *
+ * @example
+ * // Legacy mode for OData 4.0 servers
+ * new OdataQueryBuilder<User>({ legacyInOperator: true })
+ *     .filter(f => f.where(x => x.status.in(['active', 'pending'])))
+ *     .toQuery();
+ * // "?$filter=(status eq 'active' or status eq 'pending')"
+ *
+ * @example
+ * // Using has() for enum flags
+ * new OdataQueryBuilder<Product>()
+ *     .filter(f => f.where(x => x.color.has("Sales.Color'Yellow'")))
+ *     .toQuery();
+ * // "?$filter=color has Sales.Color'Yellow'"
+ *
+ * @example
+ * // Negation with not()
+ * new OdataQueryBuilder<User>()
+ *     .filter(f => f.where(x => x.name.contains('test')).not())
+ *     .toQuery();
+ * // "?$filter=not (contains(name, 'test'))"
+ */
 export class OdataQueryBuilder<T> {
     private queryComponents: QueryComponents<T> = {};
+    private readonly filterContext: FilterRenderContext;
 
-    public top(topCount: number): this {
-        if (topCount === null || topCount === undefined) return this;
-        if (
-            typeof topCount !== 'number' ||
-            !Number.isFinite(topCount) ||
-            topCount < 0
-        ) {
-            throw new Error(
-                'Invalid top count: Must be a non-negative finite number.',
-            );
-        }
-        if (
-            this.queryComponents.top !== undefined &&
-            this.queryComponents.top !== topCount
-        ) {
-            console.warn(
-                'Overwriting existing top value. Multiple calls to top() will use the last valid value.',
-            );
-        }
-        if (topCount > 0) {
-            this.queryComponents.top = topCount;
-        } else {
-            delete this.queryComponents.top;
-        }
+    /**
+     * Creates a new OdataQueryBuilder instance.
+     *
+     * @param options - Configuration options for query generation
+     */
+    constructor(options: OdataQueryBuilderOptions = {}) {
+        this.filterContext = {
+            legacyInOperator: options.legacyInOperator,
+        };
+    }
+
+    /**
+     * Limits the number of results returned.
+     *
+     * @param topCount - Maximum number of entities to return (must be positive)
+     * @returns This builder for chaining
+     * @throws Error if topCount is negative
+     *
+     * @example
+     * builder.top(10)  // $top=10
+     */
+    top(topCount: number): this {
+        if (!topCount || this.queryComponents.top) return this;
+        if (topCount < 0) throw new Error('Invalid top count');
+
+        this.queryComponents.top = topCount;
+
         return this;
     }
 
-    public skip(skipCount: number): this {
-        if (skipCount === null || skipCount === undefined) return this;
-        if (
-            typeof skipCount !== 'number' ||
-            !Number.isFinite(skipCount) ||
-            skipCount < 0
-        ) {
-            throw new Error(
-                'Invalid skip count: Must be a non-negative finite number.',
-            );
-        }
-        if (
-            this.queryComponents.skip !== undefined &&
-            this.queryComponents.skip !== skipCount
-        ) {
-            console.warn(
-                'Overwriting existing skip value. Multiple calls to skip() will use the last valid value.',
-            );
-        }
+    /**
+     * Skips a number of results for pagination.
+     *
+     * @param skipCount - Number of entities to skip (must be positive)
+     * @returns This builder for chaining
+     * @throws Error if skipCount is negative
+     *
+     * @example
+     * builder.skip(20).top(10)  // $skip=20&$top=10 (page 3)
+     */
+    skip(skipCount: number): this {
+        if (!skipCount || this.queryComponents.skip) return this;
+        if (skipCount < 0) throw new Error('Invalid skip count');
 
-        if (skipCount > 0) {
-            this.queryComponents.skip = skipCount;
-        } else {
-            delete this.queryComponents.skip;
-        }
+        this.queryComponents.skip = skipCount;
+
         return this;
     }
 
-    public select(
-        ...selectProps: ReadonlyArray<Extract<keyof Required<T>, string>>
-    ): this {
-        // Check if someone passed null or undefined explicitly (plain JS usage)
-        if (
-            selectProps.length === 1 &&
-            (selectProps[0] === null || selectProps[0] === undefined)
-        ) {
-            throw new Error(
-                'Invalid select input: Argument cannot be null or undefined. Pass an array or individual strings.',
-            );
-        }
-
-        if (selectProps.length === 0) {
-            return this;
-        }
-
-        // Check if any parameter is null or undefined
-        if (selectProps.some(prop => prop === null || prop === undefined)) {
-            throw new Error(
-                'Invalid select input: All properties must be non-empty strings.',
-            );
-        }
+    /**
+     * Selects specific properties to return (projection).
+     *
+     * Supports nested property paths using '/' separator for type-safe
+     * selection of properties in complex types and navigation properties.
+     *
+     * @param selectProps - Property paths to include in the response
+     * @returns This builder for chaining
+     * @throws Error if any property name is invalid
+     *
+     * @example
+     * // Simple properties
+     * builder.select('name', 'email')  // $select=name, email
+     *
+     * @example
+     * // Nested properties with IntelliSense support
+     * builder.select('name', 'address/city', 'address/zip')
+     * // $select=name, address/city, address/zip
+     */
+    select(...selectProps: SelectFields<Required<T>>[]): this {
         if (selectProps.length === 0) return this;
+        if (selectProps.some(prop => !prop))
+            throw new Error('Invalid select input');
 
-        if (
-            selectProps.some(prop => typeof prop !== 'string' || !prop.trim())
-        ) {
-            throw new Error(
-                'Invalid select input: All properties must be non-empty strings.',
-            );
-        }
-        this.addComponent(
-            'select',
-            selectProps.map(p => p.trim()).filter(p => p),
-        );
-        return this;
+        return this.addComponent('select', selectProps);
     }
 
-    public filter(
-        ...filters: ReadonlyArray<
-            CombinedFilter<Required<T>> | QueryFilter<Required<T>>
-        >
-    ): this {
-        // Check if someone passed null or undefined explicitly (plain JS usage)
-        if (
-            filters.length === 1 &&
-            (filters[0] === null || filters[0] === undefined)
-        ) {
-            throw new Error(
-                'Invalid filter input: Argument cannot be null or undefined. Pass an array or individual filter objects.',
-            );
-        }
+    /**
+     * Adds filter conditions to the query.
+     *
+     * Supports two syntaxes:
+     * 1. Callback syntax with FilterBuilder (recommended for type safety)
+     * 2. Object syntax with raw filter objects
+     *
+     * @param filters - Filter objects or callback function
+     * @returns This builder for chaining
+     * @throws Error if filter is invalid
+     *
+     * @example
+     * // Callback syntax (recommended)
+     * builder.filter(f => f.where(x => x.name.eq('John')))
+     *
+     * @example
+     * // Object syntax
+     * builder.filter({ field: 'name', operator: 'eq', value: 'John' })
+     */
+    filter(
+        ...filters: (CombinedFilter<Required<T>> | QueryFilter<Required<T>>)[]
+    ): this;
+    /**
+     * Adds filter conditions using FilterBuilder callback syntax.
+     *
+     * @param callback - Function that receives a FilterBuilder and returns it
+     * @returns This builder for chaining
+     */
+    filter(
+        callback: (f: FilterBuilder<Required<T>>) => FilterBuilder<Required<T>>,
+    ): this;
 
-        if (filters.length === 0) {
+    filter(
+        ...args:
+            | [(f: FilterBuilder<Required<T>>) => FilterBuilder<Required<T>>]
+            | Array<CombinedFilter<Required<T>> | QueryFilter<Required<T>>>
+    ): this {
+        // Handle callback syntax: .filter(f => f.where(x => x.name.eq('John')))
+        if (args.length === 1 && typeof args[0] === 'function') {
+            const callback = args[0] as (
+                f: FilterBuilder<Required<T>>,
+            ) => FilterBuilder<Required<T>>;
+            const builder = callback(new FilterBuilder<Required<T>>());
+            const result = builder.build();
+            if (result) {
+                return this.addComponent('filter', [result]);
+            }
             return this;
         }
 
-        // Check if any filter is null or undefined
-        if (filters.some(filter => filter === null || filter === undefined)) {
-            throw new Error(
-                'Invalid filter input: Filter cannot be null or undefined.',
-            );
-        }
+        // Handle object syntax: .filter({ field: 'name', operator: 'eq', value: 'John' })
+        const filters = args as Array<
+            CombinedFilter<Required<T>> | QueryFilter<Required<T>>
+        >;
         if (filters.length === 0) return this;
 
         for (const filter of filters) {
             if (!filter) {
-                throw new Error(
-                    'Invalid filter input: Filter array contains null or undefined element.',
-                );
+                throw new Error('Invalid filter input');
             }
-            if (isBasicFilter(filter)) {
-                if (filter.value !== null) {
-                    const valueType = getValueType(filter.value);
-                    if (
-                        !isValidOperator(valueType, filter.operator as string)
-                    ) {
-                        throw new Error(
-                            `Invalid operator "${String(filter.operator)}" for type "${valueType}" on field "${String(filter.field)}".`,
-                        );
-                    }
+
+            if (isInFilter(filter)) {
+                // InFilter is valid
+            } else if (isNegatedFilter(filter)) {
+                // NegatedFilter is valid
+            } else if (isHasFilter(filter)) {
+                // HasFilter is valid
+            } else if (isBasicFilter(filter)) {
+                const valueType = getValueType(filter.value);
+
+                if (!isValidOperator(valueType, filter.operator)) {
+                    throw new Error(
+                        `Invalid operator "${filter.operator}" for type "${valueType}"`,
+                    );
                 }
-            } else if (!isCombinedFilter(filter) && !isQueryFilter(filter)) {
+            } else if (isLambdaFilter(filter)) {
+                // check this?
+            } else if (!isCombinedFilter(filter)) {
                 throw new Error(
-                    `Invalid filter input structure: ${JSON.stringify(filter)}`,
+                    `Invalid filter input: ${JSON.stringify(filter)}`,
                 );
             }
         }
-        this.addComponent('filter', filters);
-        return this;
+
+        return this.addComponent('filter', filters);
     }
 
-    public expand(
-        ...expandFields: ReadonlyArray<ExpandFields<Required<T>>>
-    ): this {
-        // Check if someone passed null or undefined explicitly (plain JS usage)
-        if (
-            expandFields.length === 1 &&
-            (expandFields[0] === null || expandFields[0] === undefined)
-        ) {
-            throw new Error(
-                'Invalid expand input: Argument cannot be null or undefined. Pass an array or individual strings.',
-            );
-        }
-
-        if (expandFields.length === 0) {
-            return this;
-        }
-
-        // Check if any field is null or undefined
-        if (expandFields.some(field => field === null || field === undefined)) {
-            throw new Error(
-                'Invalid expand input: All fields must be non-empty strings.',
-            );
-        }
+    /**
+     * Expands navigation properties to include related entities.
+     *
+     * @param expandFields - Navigation properties to expand
+     * @returns This builder for chaining
+     * @throws Error if any expand field is invalid
+     *
+     * @example
+     * builder.expand('orders')  // $expand=orders
+     *
+     * @example
+     * // Nested expand with select
+     * builder.expand({ orders: { select: ['id', 'price'] } })
+     */
+    expand(...expandFields: ExpandFields<T>[]): this {
         if (expandFields.length === 0) return this;
+        if (expandFields.some(field => !field))
+            throw new Error('Field missing for expand');
 
-        if (
-            expandFields.some(
-                field => typeof field !== 'string' || !field.trim(),
-            )
-        ) {
-            throw new Error(
-                'Invalid expand input: All fields must be non-empty strings.',
-            );
-        }
-        this.addComponent(
-            'expand',
-            expandFields.map(f => f.trim()).filter(f => f) as ExpandFields<
-                Required<T>
-            >[],
-        );
-        return this;
+        return this.addComponent('expand', expandFields);
     }
 
-    public count(countEntities = false): this {
-        const newCountValue = countEntities
+    /**
+     * Adds count to the query.
+     *
+     * @param countEntities - If true, returns only the count (/$count).
+     *                        If false, includes count in response ($count=true).
+     * @returns This builder for chaining
+     *
+     * @example
+     * builder.count()  // $count=true (includes count with results)
+     *
+     * @example
+     * builder.count(true)  // /$count (returns only the count number)
+     */
+    count(countEntities = false): this {
+        if (this.queryComponents.count) return this;
+
+        this.queryComponents.count = countEntities
             ? countEntitiesQuery
             : '$count=true';
-        if (
-            this.queryComponents.count !== undefined &&
-            this.queryComponents.count !== newCountValue
-        ) {
-            console.warn(
-                'Overwriting existing count setting. Multiple calls to count() will use the last setting.',
-            );
-        }
-        this.queryComponents.count = newCountValue;
+
         return this;
     }
 
-    public orderBy(
-        ...orderByInput: ReadonlyArray<
-            OrderByDescriptor<Required<T>> | null | undefined
-        >
-    ): this {
-        if (orderByInput.length === 0) {
-            return this;
-        }
+    /**
+     * Orders the results by one or more properties.
+     *
+     * @param orderBy - Order descriptors with field and direction
+     * @returns This builder for chaining
+     *
+     * @example
+     * builder.orderBy({ field: 'name', order: 'asc' })
+     *
+     * @example
+     * // Multiple sort criteria
+     * builder.orderBy(
+     *     { field: 'lastName', order: 'asc' },
+     *     { field: 'firstName', order: 'asc' }
+     * )
+     */
+    orderBy(...orderBy: OrderByDescriptor<Required<T>>[]): this {
+        if (orderBy.length === 0) return this;
 
-        // Handle single null/undefined parameter (plain JS usage)
-        if (
-            orderByInput.length === 1 &&
-            (orderByInput[0] === null || orderByInput[0] === undefined)
-        ) {
-            return this;
-        }
-
-        const validOrderByDescriptors = orderByInput.filter(
-            (desc): desc is OrderByDescriptor<Required<T>> =>
-                isValidOrderByDescriptor(
-                    desc as OrderByDescriptor<Required<T>>,
-                ),
-        );
-
-        if (validOrderByDescriptors.length === 0) {
-            return this;
-        }
-
-        this.addComponent('orderBy', validOrderByDescriptors);
-        return this;
+        return this.addComponent('orderBy', orderBy);
     }
 
-    public search(
-        searchExpression: string | SearchExpressionBuilder | null | undefined,
-    ): this {
-        if (searchExpression === null || searchExpression === undefined) {
+    /**
+     * Adds a free-text search to the query.
+     *
+     * Accepts either a simple string or a SearchExpressionBuilder for
+     * complex search expressions with AND, OR, NOT operators.
+     *
+     * @param searchExpression - Search string or SearchExpressionBuilder
+     * @returns This builder for chaining
+     * @throws Error if searchExpression is not a string or SearchExpressionBuilder
+     *
+     * @example
+     * builder.search('coffee')  // $search=coffee
+     *
+     * @example
+     * // Complex search with SearchExpressionBuilder
+     * builder.search(
+     *     new SearchExpressionBuilder()
+     *         .term('coffee')
+     *         .and()
+     *         .term('organic')
+     * )  // $search=coffee%20AND%20organic
+     */
+    search(searchExpression: string | SearchExpressionBuilder): this {
+        if (!searchExpression) {
             delete this.queryComponents.search;
             return this;
         }
 
-        if (!isValidSearchInput(searchExpression)) {
+        // Runtime validation for invalid types
+        if (
+            typeof searchExpression !== 'string' &&
+            !(searchExpression instanceof SearchExpressionBuilder)
+        ) {
             throw new Error(
-                'Invalid search input. Must be a non-empty string or an instance of SearchExpressionBuilder.',
+                'search() expects a string or SearchExpressionBuilder',
             );
         }
 
-        let searchTermString: string;
-        if (typeof searchExpression === 'string') {
-            searchTermString = searchExpression.trim();
-            if (searchTermString === '') {
-                delete this.queryComponents.search;
-                return this;
-            }
-        } else {
-            searchTermString = searchExpression.toString().trim();
-            if (searchTermString === '') {
-                delete this.queryComponents.search;
-                return this;
-            }
-        }
-        this.queryComponents.search = searchTermString;
+        this.queryComponents.search =
+            typeof searchExpression === 'string'
+                ? createSearchTerm(searchExpression)
+                : searchExpression.toString();
         return this;
     }
 
-    public toQuery(): string {
-        const queryGeneratorMap: {
-            [K in keyof QueryComponents<T>]-?: (
-                component: NonNullable<QueryComponents<T>[K]>,
-            ) => string;
-        } = {
-            count: component => component,
-            filter: component => toFilterQuery(Array.from(component)),
-            top: component => toTopQuery(component),
-            skip: component => toSkipQuery(component),
-            select: component => toSelectQuery(Array.from(component)),
+    /**
+     * Builds and returns the OData query string.
+     *
+     * Combines all configured query options into a properly formatted
+     * OData query string ready to append to an endpoint URL.
+     *
+     * @returns The complete OData query string (e.g., "?$filter=...&$top=10")
+     *          Returns empty string if no query options are set.
+     *          Returns "/$count..." format if count(true) was used.
+     *
+     * @example
+     * new OdataQueryBuilder<User>()
+     *     .filter(f => f.where(x => x.isActive.isTrue()))
+     *     .top(10)
+     *     .toQuery();
+     * // "?$filter=isActive eq true&$top=10"
+     */
+    toQuery(): string {
+        const queryGeneratorMap: Record<
+            keyof QueryComponents<T>,
+            (component: QueryComponents<T>[keyof QueryComponents<T>]) => string
+        > = {
+            count: component => component as string,
+            filter: component =>
+                toFilterQuery(
+                    Array.from(component as Set<QueryFilter<T>>),
+                    this.filterContext,
+                ),
+            top: component => toTopQuery(component as number),
+            skip: component => toSkipQuery(component as number),
+            select: component =>
+                toSelectQuery(
+                    Array.from(component as Set<Extract<keyof T, string>>),
+                ),
             expand: component =>
-                toExpandQuery<Required<T>>(Array.from(component)),
-            orderBy: component => toOrderByQuery(Array.from(component)),
+                toExpandQuery<T>(Array.from(component as Set<ExpandFields<T>>)),
+            orderBy: component =>
+                toOrderByQuery(
+                    Array.from(component as Set<OrderByDescriptor<T>>),
+                ),
             search: component =>
-                component ? `$search=${encodeURIComponent(component)}` : '',
+                `$search=${encodeURIComponent(component as string)}`,
         };
 
-        const componentOrder: ReadonlyArray<keyof QueryComponents<T>> = [
-            'count',
-            'filter',
-            'search',
-            'top',
-            'skip',
-            'select',
-            'orderBy',
-            'expand',
-        ];
+        const sortedEntries = Object.entries(this.queryComponents).sort(
+            ([a], [b]) => {
+                const orderA = Object.keys(queryGeneratorMap).indexOf(a);
+                const orderB = Object.keys(queryGeneratorMap).indexOf(b);
+                return orderA - orderB;
+            },
+        );
 
         const queryStringParts: string[] = [];
 
-        for (const key of componentOrder) {
-            const currentKey = key;
-            const componentValue = this.queryComponents[currentKey];
+        for (const [operator, component] of sortedEntries) {
+            if (!component) continue;
 
-            if (componentValue !== undefined && componentValue !== null) {
-                const specificQueryFn = queryGeneratorMap[currentKey] as (
-                    comp: unknown,
-                ) => string;
-                const queryPart = specificQueryFn(
-                    componentValue as NonNullable<typeof componentValue>,
-                );
-                if (queryPart) {
-                    queryStringParts.push(queryPart);
-                }
-            }
+            const queryPart = queryGeneratorMap[
+                operator as keyof QueryComponents<T>
+            ](component as QueryComponents<T>[keyof QueryComponents<T>]);
+            if (!queryPart) continue;
+
+            queryStringParts.push(queryPart);
         }
 
         const queryString = queryStringParts.join('&');
 
-        if (
-            this.queryComponents.count === countEntitiesQuery &&
-            queryString.startsWith(countEntitiesQuery)
-        ) {
-            const remainingQueryString = queryString.substring(
-                countEntitiesQuery.length,
-            );
-            if (remainingQueryString.startsWith('&')) {
-                return `${countEntitiesQuery}?${remainingQueryString.substring(1)}`;
-            } else if (remainingQueryString === '') {
-                return countEntitiesQuery;
-            }
-            return `${countEntitiesQuery}${remainingQueryString}`;
+        if (queryString.startsWith('/$count')) {
+            const remainingQueryString = queryString.slice('/$count'.length);
+
+            if (remainingQueryString.length > 0)
+                return `/$count?${remainingQueryString.substring(1)}`;
+
+            return '/$count';
         }
 
         return queryString.length > 0 ? `?${queryString}` : '';
     }
 
     private addComponent<
-        K extends keyof Pick<
-            QueryComponents<T>,
-            'select' | 'filter' | 'expand' | 'orderBy'
-        >,
+        K extends keyof QueryComponents<T>,
         U = NonNullable<QueryComponents<T>[K]> extends Set<infer V> ? V : never,
-    >(type: K, values: ReadonlyArray<U>): this {
-        if (!values || values.length === 0) return this;
+    >(type: K, values: U[]): this {
+        if (values.length === 0) return this;
 
         if (!this.queryComponents[type]) {
             this.queryComponents[type] = new Set() as QueryComponents<T>[K];
         }
 
-        const componentSet = this.queryComponents[type] as Set<U>;
+        const componentSet = this.queryComponents[type] as unknown as Set<U>;
         for (const value of values) {
-            if (value !== null && value !== undefined) {
-                componentSet.add(value);
-            }
+            componentSet.add(value);
         }
+
         return this;
     }
 }
