@@ -1,6 +1,6 @@
 {
     "name": "odata-builder",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "odata builder for easier and typesafe usage",
     "author": "Marcel Wenner (https://github.com/marcelwenner)",
     "license": "MIT",

@@ -109,9 +109,12 @@ new OdataQueryBuilder<User>()
 new OdataQueryBuilder<User>()
     .filter({
         field: 'tags',
-        operator: 'eq',
-        value: 'admin',
         lambdaOperator: 'any',
+        expression: {
+            field: 's',
+            operator: 'eq',
+            value: 'admin',
+        },
     })
     .toQuery();
 // ?$filter=tags/any(s: s eq 'admin')
@@ -225,14 +228,21 @@ f.where(x => x.createdAt.month().ge(6));
 Filter array fields with `any` and `all`:
 
 ```typescript
-// Simple array
+// Simple array with contains
 new OdataQueryBuilder<User>()
     .filter({
         field: 'tags',
-        operator: 'contains',
-        value: 'test',
         lambdaOperator: 'any',
-        ignoreCase: true,
+        expression: {
+            field: 's',
+            operator: 'eq',
+            value: true,
+            ignoreCase: true,
+            function: {
+                type: 'contains',
+                value: 'test',
+            },
+        },
     })
     .toQuery();
 // ?$filter=tags/any(s: contains(tolower(s), 'test'))
@@ -241,10 +251,12 @@ new OdataQueryBuilder<User>()
 new OdataQueryBuilder<User>()
     .filter({
         field: 'addresses',
-        operator: 'eq',
-        value: 'Berlin',
         lambdaOperator: 'any',
-        innerProperty: 'city',
+        expression: {
+            field: 'city',
+            operator: 'eq',
+            value: 'Berlin',
+        },
     })
     .toQuery();
 // ?$filter=addresses/any(s: s/city eq 'Berlin')
