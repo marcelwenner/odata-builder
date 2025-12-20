@@ -47,27 +47,12 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Verify Secrets (Release only)
-        if: github.event_name == 'release' && github.actor != 'dependabot[bot]'
+      - name: Log Release Info
+        if: github.event_name == 'release'
         run: |
-          echo "Verifying required secrets for release..."
-          if [[ -z "${{ secrets.NPM_TOKEN }}" ]]; then
-            echo "NPM_TOKEN is required for releases"
-            exit 1
-          fi
-
-          # Configure NPM authentication
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-          if ! npm whoami 2>/dev/null; then
-            echo "Cannot authenticate with NPM registry"
-            exit 1
-          fi
-
-          NPM_USER=$(npm whoami 2>/dev/null)
-          echo "Authenticated as NPM user: $NPM_USER"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          echo "Release event detected"
+          echo "Tag: ${{ github.event.release.tag_name }}"
+          echo "Using OIDC Trusted Publishing for NPM authentication"
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # CODE QUALITY GATE
@@ -319,10 +304,8 @@ jobs:
       - name: Publish to NPM
         run: |
           cd dist
-          npm publish --access public
+          npm publish --access public --provenance
           echo "Successfully published ${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   # PIPELINE SUMMARY
