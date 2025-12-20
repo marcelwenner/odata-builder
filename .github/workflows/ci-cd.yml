@@ -1,4 +1,4 @@
-name: 🚀 CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -20,18 +20,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
-
-concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+  NODE_VERSION: '22'
 
 jobs:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🔧 SETUP & PREPARATION
+  # SETUP & PREPARATION
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   setup:
-    name: 🔧 Setup Environment
+    name: Setup Environment
     runs-on: ubuntu-latest
     outputs:
       node-version: ${{ env.NODE_VERSION }}
@@ -39,701 +35,184 @@ jobs:
       is-main: ${{ github.ref == 'refs/heads/main' }}
       is-pr: ${{ github.event_name == 'pull_request' }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-<<<<<<< HEAD
-            - name: Check for tags in PR
-              run: |
-                  echo "Checking for tags on all commits in the PR..."
-                  git fetch --tags --quiet
-                  for COMMIT in $(git rev-list ${{ github.event.pull_request.base.sha }}..${{ github.sha }}); do
-                    if git tag --points-at $COMMIT | grep -q .; then
-                      echo "Tag found on commit $COMMIT. Tags are not allowed in PRs."
-                      exit 1
-                    fi
-                  done
-                  echo "No tags found on any commits in the PR."
-
-            - name: Check for required labels
-              run: |
-                  echo "Checking for required labels ('ready-for-review' or 'dependencies')..."
-                  if ! curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-                    https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }} | \
-                    jq -e '.labels[].name | select(. == "ready-for-review" or . == "dependencies")' > /dev/null 2>&1; then
-                    echo "PR must have either the 'ready-for-review' or 'dependencies' label."
-                    exit 1
-                  fi
-
-    check-secrets:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Skip for Dependabot
-              if: github.actor == 'dependabot[bot]'
-              run: echo "Skipping secret verification for Dependabot."
-
-            - name: Verify required secrets
-              if: github.actor != 'dependabot[bot]'
-              run: |
-                  echo "Verifying required secrets..."
-                  REQUIRED_SECRETS=("GITHUB_TOKEN" "NPM_TOKEN")
-                  for SECRET in "${REQUIRED_SECRETS[@]}"; do
-                    if [ -z "${!SECRET}" ]; then
-                      echo "Error: Required secret $SECRET is not set."
-                      exit 1
-                    fi
-                  done
-                  echo "All required secrets are set."
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-              shell: bash
-
-    test:
-        needs: check-secrets
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                node-version: [18, 20]
-        steps:
-            - uses: actions/checkout@v3
-            - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: ${{ matrix.node-version }}
-            - name: Cache Node.js modules
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-${{ matrix.node-version }}-
-            - name: Install dependencies
-              run: npm ci
-            - name: Run tests with coverage
-              id: run-tests
-              run: npm run test -- --coverage --reporter=json --reporter=default --outputFile=test-results.json
-
-            - name: Generate test summary and coverage
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  TEST_SUMMARY=$(cat test-results.json | jq -r '
-                  {
-                    "total": (.numTotalTests),
-                    "passed": (.numPassedTests),
-                    "failed": (.numFailedTests),
-                    "pass_rate": (if (.numTotalTests) > 0 then (.numPassedTests / .numTotalTests * 100 | floor) else 100 end)
-                  }')
-                  echo "TEST_SUMMARY_TOTAL=$(echo "$TEST_SUMMARY" | jq -r '.total')" >> $GITHUB_ENV
-                  echo "TEST_SUMMARY_PASSED=$(echo "$TEST_SUMMARY" | jq -r '.passed')" >> $GITHUB_ENV
-                  echo "TEST_SUMMARY_FAILED=$(echo "$TEST_SUMMARY" | jq -r '.failed')" >> $GITHUB_ENV
-
-                  PASS_RATE=$(echo "$TEST_SUMMARY" | jq -r '.pass_rate')
-                  if (( $(echo "$PASS_RATE == 100" | bc -l) )); then
-                    PASS_RATE_ICON="🟢"
-                    TEST_STATUS="✅ All tests passed"
-                  else
-                    PASS_RATE_ICON="🔴"
-                    TEST_STATUS="❌ Tests failed"
-                  fi
-                  echo "TEST_SUMMARY_PASS_RATE=${PASS_RATE_ICON} ${PASS_RATE}%" >> $GITHUB_ENV
-                  echo "TEST_STATUS=${TEST_STATUS}" >> $GITHUB_ENV
-
-            - name: Generate test coverage summary with insights
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  COVERAGE_OUTPUT=$(npm run coverage:ci | grep "All files" | awk -F'|' '
-                    {
-                      statements=$2+0;
-                      branches=$3+0;
-                      functions=$4+0;
-                      lines=$5+0;
-
-                      if (statements == 100) statements_insight="🚀 Excellent coverage!";
-                      else if (statements >= 90) statements_insight="✅ Great coverage, keep it up!";
-                      else if (statements >= 75) statements_insight="⚠️ Good coverage, but improvements are possible.";
-                      else statements_insight="❌ Coverage needs improvement.";
-
-                      if (branches == 100) branches_insight="🚀 Excellent coverage!";
-                      else if (branches >= 90) branches_insight="✅ Great coverage, keep it up!";
-                      else if (branches >= 75) branches_insight="⚠️ Good coverage, but improvements are possible.";
-                      else branches_insight="❌ Coverage needs improvement.";
-
-                      if (functions == 100) functions_insight="🚀 Excellent coverage!";
-                      else if (functions >= 90) functions_insight="✅ Great coverage, keep it up!";
-                      else if (functions >= 75) functions_insight="⚠️ Good coverage, but improvements are possible.";
-                      else functions_insight="❌ Coverage needs improvement.";
-
-                      if (lines == 100) lines_insight="🚀 Excellent coverage!";
-                      else if (lines >= 90) lines_insight="✅ Great coverage, keep it up!";
-                      else if (lines >= 75) lines_insight="⚠️ Good coverage, but improvements are possible.";
-                      else lines_insight="❌ Coverage needs improvement.";
-
-                      printf "| Statements  | %s       | %s |\n", $2, statements_insight;
-                      printf "| Branches    | %s       | %s |\n", $3, branches_insight;
-                      printf "| Functions   | %s       | %s |\n", $4, functions_insight;
-                      printf "| Lines       | %s       | %s |\n", $5, lines_insight;
-                    }')
-
-                  echo "COVERAGE<<EOF" >> $GITHUB_ENV
-                  echo "$COVERAGE_OUTPUT" >> $GITHUB_ENV
-                  echo "EOF" >> $GITHUB_ENV
-
-            - name: Post test summary and coverage to PR
-              if: ${{ github.event_name == 'pull_request' }}
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  header: '🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}'
-                  message: |
-                      # 🚀 Node.js ${{ matrix.node-version }} - ${{ env.TEST_STATUS }}
-
-                      ## 🛠 **Summary**
-                      | Metric         | Value                                   |
-                      |----------------|-----------------------------------------|
-                      | **Total Tests**| 🧪 ${{ env.TEST_SUMMARY_TOTAL }}        |
-                      | **Passed**     | ✅ ${{ env.TEST_SUMMARY_PASSED }}       |
-                      | **Failed**     | ❌ ${{ env.TEST_SUMMARY_FAILED }}       |
-                      | **Pass Rate**  | **${{ env.TEST_SUMMARY_PASS_RATE }}** |
-
-                      ## 📊 **Coverage Details**
-                      <details>
-                      <summary>🔍 Click to expand</summary>
-
-                      ### Coverage Summary with Insights
-                      | Metric      | Coverage | Insights                          |
-                      |-------------|----------|-----------------------------------|
-                      ${{ env.COVERAGE }}
-                      > **Note:** Coverage insights are calculated based on the current thresholds.  
-                      > Consider adjusting thresholds for stricter validation and enhanced quality checks if needed.
-
-                      </details>
-
-                      ---
-                      > *Generated automatically by CI Pipeline*
-                  operationType: upsert
-
-            - name: Upload full test output as artifact
-              if: ${{ github.event_name == 'pull_request' }}
-              uses: actions/upload-artifact@v3
-              with:
-                  name: full-test-output-${{ matrix.node-version }}
-                  path: test-results.json
-
-    lint:
-        needs: check-secrets
-        runs-on: ubuntu-latest
-        strategy:
-            matrix:
-                node-version: [18, 20]
-        steps:
-            - uses: actions/checkout@v3
-
-            - name: Set up Node.js ${{ matrix.node-version }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: ${{ matrix.node-version }}
-
-            - name: Cache Node.js modules
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('**/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-${{ matrix.node-version }}-
-
-            - name: Install dependencies
-              run: npm ci
-
-            - name: Run linting
-              id: eslint-check
-              run: npm run lint -- --format json --output-file eslint-results.json
-              continue-on-error: true
-
-            - name: Generate Lint Summary
-              id: lint-summary
-              run: |
-                  ESLINT_OUTPUT=$(cat eslint-results.json)
-
-                  ERROR_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 2)] | length')
-                  WARNING_COUNT=$(echo "$ESLINT_OUTPUT" | jq '[.[] | .messages[] | select(.severity == 1)] | length')
-
-                  DETAILS=$(echo "$ESLINT_OUTPUT" | jq -r '[.[] | select((.messages | length > 0) or (.suppressedMessages | length > 0)) | {
-                    file: (.filePath | sub("^.*/"; "")),
-                    messages: (
-                      [.messages[] | {
-                        severity: (if (.severity) == 2 then "🚨 Error" else "⚠️ Warning" end),
-                        line: .line,
-                        column: .column,
-                        message: .message,
-                        ruleId: .ruleId
-                      }] +
-                      [.suppressedMessages[] | {
-                        severity: "⚠️ Suppressed",
-                        line: .line,
-                        column: .column,
-                        message: .message,
-                        ruleId: .ruleId
-                      }]
-                    )
-                  }] | map(
-                    "#### File: `\(.file)`\n" +
-                    (.messages | map("- \(.severity) on line \(.line), column \(.column): \(.message) (\(.ruleId))") | join("\n"))
-                  ) | join("\n\n")' | sed 's/%/%25/g; s/\n/%0A/g; s/\r/%0D/g')
-
-                  echo "LINT_ERRORS=$ERROR_COUNT" >> $GITHUB_ENV
-                  echo "LINT_WARNINGS=$WARNING_COUNT" >> $GITHUB_ENV
-                  echo "LINT_DETAILS<<EOF" >> $GITHUB_ENV
-                  echo "$DETAILS" >> $GITHUB_ENV
-                  echo "EOF" >> $GITHUB_ENV
-
-                  if [ "$ERROR_COUNT" -gt 0 ]; then
-                    echo "LINT_STATUS=🚨 Issues Found" >> $GITHUB_ENV
-                  else
-                    echo "LINT_STATUS=✅ No Issues" >> $GITHUB_ENV
-                  fi
-
-            - name: Post ESLint results to PR
-              if: ${{ github.event_name == 'pull_request' }}
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  header: '📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}'
-                  message: |
-                      # 📏 Node.js ${{ matrix.node-version }} - ${{ env.LINT_STATUS }}
-
-                      ## 🛠 **Lint Summary**
-                      | Metric         | Count                                   |
-                      |----------------|-----------------------------------------|
-                      | **Errors**     | 🚨 ${{ env.LINT_ERRORS }}              |
-                      | **Warnings**   | ⚠️ ${{ env.LINT_WARNINGS }}            |
-
-                      ## 🔍 **Detailed Linting Report**
-                      <details>
-                      <summary>🔍 Click to expand</summary>
-
-                      ### File-by-File Insights
-                      ${{ env.LINT_DETAILS }}
-                      ---
-                      > **🔧 Pro-Tip:**  
-                      > Suppressed errors should be reviewed and justified to maintain clean code.  
-                      > Consider fixing warnings to improve maintainability.
-
-                      > **Note:** Linting results help maintain code quality and ensure project standards are met.
-
-                      </details>
-
-                      ---
-                      > *Generated automatically by CI pipeline.*
-
-    audit:
-        needs: check-secrets
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - name: Set up Node.js 20
-              uses: actions/setup-node@v3
-              with:
-                  node-version: '20'
-            - name: Cache Node.js modules
-              uses: actions/cache@v3
-              with:
-                  path: ~/.npm
-                  key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-                  restore-keys: |
-                      ${{ runner.os }}-node-
-            - name: Install dependencies
-              run: npm ci
-            - name: Run audit
-              id: npm-audit
-              run: npm audit --production --json > npm-audit-results.json
-              continue-on-error: true
-
-            - name: Check for audit errors
-              id: check-audit-errors
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  NPM_AUDIT_OUTPUT=$(cat npm-audit-results.json)
-
-                  INFO=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.info')
-                  LOW=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.low')
-                  MODERATE=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.moderate')
-                  HIGH=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.high')
-                  CRITICAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.critical')
-                  TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.vulnerabilities.total')
-
-                  PROD=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.prod')
-                  DEV=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.dev')
-                  OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.optional')
-                  PEER=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peer')
-                  PEER_OPTIONAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.peerOptional')
-                  DEP_TOTAL=$(echo "$NPM_AUDIT_OUTPUT" | jq '.metadata.dependencies.total')
-
-                  echo "NPM_AUDIT_INFO=$INFO" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_LOW=$LOW" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_MODERATE=$MODERATE" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_HIGH=$HIGH" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_CRITICAL=$CRITICAL" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_TOTAL=$TOTAL" >> $GITHUB_ENV
-
-                  echo "NPM_AUDIT_PROD=$PROD" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_DEV=$DEV" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_OPTIONAL=$OPTIONAL" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_PEER=$PEER" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_PEER_OPTIONAL=$PEER_OPTIONAL" >> $GITHUB_ENV
-                  echo "NPM_AUDIT_DEP_TOTAL=$DEP_TOTAL" >> $GITHUB_ENV
-                  if [[ $CRITICAL -gt 0 || $HIGH -gt 0 ]]; then
-                    STATUS_ICON="🔴"
-                    STATUS_MESSAGE="**Critical vulnerabilities found! Immediate action required.**"
-                  elif [[ $MODERATE -gt 0 || $LOW -gt 0 ]]; then
-                    STATUS_ICON="🟡"
-                    STATUS_MESSAGE="**Some vulnerabilities detected. Please review the details below.**"
-                  else
-                    STATUS_ICON="🟢"
-                    STATUS_MESSAGE="**No vulnerabilities found. Excellent job keeping dependencies secure! 🎉**"
-                  fi
-
-                  echo "NPM_AUDIT_STATUS_ICON=$STATUS_ICON" >> $GITHUB_ENV
-                  if [[ $TOTAL -gt 0 ]]; then
-                    echo "NPM_AUDIT_HAS_ERRORS=true" >> $GITHUB_ENV
-                    echo "AUDIT_STATUS_MESSAGE=🚨 **Vulnerabilities detected!** Please address the issues listed above." >> $GITHUB_ENV
-                  else
-                    echo "NPM_AUDIT_HAS_ERRORS=false" >> $GITHUB_ENV
-                    echo "AUDIT_STATUS_MESSAGE=🚀 **No vulnerabilities found.** Excellent job keeping dependencies secure! 🎉" >> $GITHUB_ENV
-                  fi
-
-            - name: Post npm audit results to PR
-              if: ${{ github.event_name == 'pull_request' }}
-              uses: marocchino/sticky-pull-request-comment@v2
-              with:
-                  header: 🔒 NPM Audit Findings
-                  message: |
-                      # 🔒 **NPM Audit Findings**
-
-                      ## 🚦 **Vulnerability Summary**
-                      | **Severity**     | **Count**                           |
-                      |------------------|-------------------------------------|
-                      | 🟢 **Info**      | `${{ env.NPM_AUDIT_INFO }}`         |
-                      | 🟡 **Low**       | `${{ env.NPM_AUDIT_LOW }}`          |
-                      | 🟠 **Moderate**  | `${{ env.NPM_AUDIT_MODERATE }}`     |
-                      | 🔴 **High**      | `${{ env.NPM_AUDIT_HIGH }}`         |
-                      | 🔥 **Critical**  | `${{ env.NPM_AUDIT_CRITICAL }}`     |
-
-                      ## ${{ env.NPM_AUDIT_STATUS_ICON }} **Status**
-                      ${{ env.AUDIT_STATUS_MESSAGE }}
-
-                      ---
-
-                      ## 📦 **Dependency Overview**
-                      | **Dependency Type** | **Count**                        |
-                      |---------------------|----------------------------------|
-                      | 🏗️ **Production**   | `${{ env.NPM_AUDIT_PROD }}`      |
-                      | 🛠️ **Development**  | `${{ env.NPM_AUDIT_DEV }}`       |
-                      | 🎲 **Optional**     | `${{ env.NPM_AUDIT_OPTIONAL }}`  |
-                      | 🤝 **Peer**         | `${{ env.NPM_AUDIT_PEER }}`      |
-                      | 🤝 **Peer Optional**| `${{ env.NPM_AUDIT_PEER_OPTIONAL }}` |
-                      | 📦 **Total**        | `${{ env.NPM_AUDIT_DEP_TOTAL }}` |
-
-                      ---
-                      > 🔗 *Generated automatically by the CI pipeline to keep your dependencies secure.*
-                  operationType: upsert
-=======
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: |
-          if npm ci --dry-run > /dev/null 2>&1; then
-            echo "✅ Using npm ci for clean install"
-            npm ci
-          else
-            echo "⚠️ Using npm install as fallback"
-            npm install
-          fi
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: 🔒 Verify Secrets (Release only)
+      - name: Verify Secrets (Release only)
         if: github.event_name == 'release' && github.actor != 'dependabot[bot]'
         run: |
-          echo "🔒 Verifying required secrets for release..."
+          echo "Verifying required secrets for release..."
           if [[ -z "${{ secrets.NPM_TOKEN }}" ]]; then
-            echo "❌ NPM_TOKEN is required for releases"
+            echo "NPM_TOKEN is required for releases"
             exit 1
           fi
-          if [[ ! "${{ secrets.NPM_TOKEN }}" =~ ^npm_[A-Za-z0-9]{36}$ ]]; then
-            echo "❌ NPM_TOKEN format appears invalid"
-            exit 1
-          fi
-          
-          # Test NPM registry connectivity
-          echo "🔍 Testing NPM registry connectivity..."
-          
+
           # Configure NPM authentication
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          
+
           if ! npm whoami 2>/dev/null; then
-            echo "❌ Cannot authenticate with NPM registry"
-            echo "Please verify NPM_TOKEN has sufficient permissions"
+            echo "Cannot authenticate with NPM registry"
             exit 1
           fi
-          
+
           NPM_USER=$(npm whoami 2>/dev/null)
-          echo "✅ Authenticated as NPM user: $NPM_USER"
-          echo "✅ All secrets verified"
+          echo "Authenticated as NPM user: $NPM_USER"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🔍 CODE QUALITY GATE
+  # CODE QUALITY GATE
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   quality-gate:
-    name: 🔍 Quality Gate
+    name: Quality Gate
     needs: setup
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🎨 Lint Code
-        run: |
-          echo "🎨 Running ESLint..."
-          npm run lint
+      - name: Lint Code
+        run: npm run lint
 
-      - name: 📏 Check Format
-        run: |
-          echo "📏 Checking code formatting..."
-          npm run format -- --check
+      - name: Check Format
+        run: npm run format -- --check
         continue-on-error: true
 
-      - name: 🔒 Security Audit
+      - name: Security Audit
         if: needs.setup.outputs.is-main == 'true' || needs.setup.outputs.is-pr == 'true'
         run: |
-          echo "🔒 Running security audit..."
-          
+          echo "Running security audit..."
+
           # Check for high and critical vulnerabilities (fail CI)
-          echo "🔍 Checking for high/critical vulnerabilities..."
           if npm audit --audit-level=high --dry-run; then
-            echo "✅ No high or critical vulnerabilities found"
+            echo "No high or critical vulnerabilities found"
           else
-            echo "❌ High or critical security vulnerabilities detected!"
-            echo "🔧 Please run 'npm audit fix' to resolve issues"
+            echo "High or critical security vulnerabilities detected!"
             npm audit --audit-level=high
             exit 1
           fi
-          
-          # Check for moderate vulnerabilities (warn only)
-          echo "⚠️ Checking for moderate vulnerabilities..."
-          if ! npm audit --audit-level=moderate --dry-run; then
-            echo "⚠️ Moderate vulnerabilities found - consider reviewing:"
-            npm audit --audit-level=moderate
-          fi
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🧪 COMPREHENSIVE TESTING
+  # COMPREHENSIVE TESTING
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   test-matrix:
-    name: 🧪 Test Node.js ${{ matrix.node }} on ${{ matrix.os }}
+    name: Test Node.js ${{ matrix.node }} on ${{ matrix.os }}
     needs: [setup, quality-gate]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20, 22]
+        os: [ubuntu-latest]
         include:
-          - node: 20
+          - node: 22
             os: ubuntu-latest
             coverage: true
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v6
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
->>>>>>> origin/main
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🧪 Run Tests
+      - name: Run Tests
         run: npm test
 
-<<<<<<< HEAD
-            - name: Sanitize ref name
-              if: github.event_name == 'push'
-              run: |
-                  echo "SANITIZED_REF_NAME=${GITHUB_REF_NAME//\//_}" >> $GITHUB_ENV
-
-            - name: Archive build artifacts
-              if: github.event_name == 'push'
-              uses: actions/upload-artifact@v4
-              with:
-                  name: dist-${{ github.run_id }}-${{ env.SANITIZED_REF_NAME }}
-                  path: dist/
-
-    create-release:
-        needs: [build]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - name: Check version consistency
-              run: |
-                  PACKAGE_VERSION=$(jq -r .version package.json)
-                  TAG_VERSION=${GITHUB_REF#refs/tags/v}
-                  if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-                    echo "Version mismatch: package.json ($PACKAGE_VERSION) != tag ($TAG_VERSION)"
-                    exit 1
-                  fi
-              env:
-                  GITHUB_REF: ${{ github.ref }}
-            - name: Generate release notes
-              run: |
-                  PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^)
-                  git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" > release-notes.md
-            - name: Create GitHub Release
-              uses: actions/create-release@v1
-              with:
-                  tag_name: ${{ github.ref_name }}
-                  release_name: ${{ github.ref_name }}
-                  body_path: ./release-notes.md
-                  draft: false
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    request-approval:
-        needs: [create-release]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
-        runs-on: ubuntu-latest
-        environment:
-            name: production
-        steps:
-            - name: Wait for approval
-              run: echo "Approval required to proceed to the next job. Check the artifacts and approve if everything is okay."
-
-    publish:
-        needs: [request-approval]
-        if: startsWith(github.ref, 'refs/tags/') && github.base_ref == 'main'
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
-            - name: Download build artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  name: dist-${{ github.run_id }}-${{ github.ref_name }}
-                  path: dist
-            - name: Use Node.js
-              uses: actions/setup-node@v3
-              with:
-                  node-version: '20'
-                  registry-url: 'https://registry.npmjs.org'
-            - name: Publish to NPM
-              run: cd dist && npm publish --access public
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-=======
-      - name: 📊 Generate Coverage (Node 20 + Ubuntu only)
+      - name: Generate Coverage
         if: matrix.coverage
         run: npm run coverage:ci
 
-      - name: 📈 Upload Coverage
-        if: matrix.coverage
-        run: |
-          if [[ -f "./coverage/lcov.info" ]]; then
-            echo "📈 Uploading coverage to Codecov..."
-          else
-            echo "⚠️ Coverage file not found - skipping upload"
-            echo "Expected: ./coverage/lcov.info"
-            echo "Available files:"
-            find . -name "*.info" -o -name "*coverage*" | head -10 || echo "No coverage files found"
-            exit 0
-          fi
-        continue-on-error: true
-        
-      - name: 📈 Codecov Upload
+      - name: Upload Coverage
         if: matrix.coverage && hashFiles('./coverage/lcov.info') != ''
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
-          verbose: true
         continue-on-error: true
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🏗️ BUILD & VERIFICATION
+  # BUILD & VERIFICATION
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   build:
-    name: 🏗️ Build & Package
+    name: Build & Package
     needs: [setup, quality-gate, test-matrix]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.package-info.outputs.version }}
       package-name: ${{ steps.package-info.outputs.name }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🏗️ Build Project
-        run: |
-          echo "🏗️ Building project..."
-          npm run build
+      - name: Build Project
+        run: npm run build
 
-      - name: ✅ Verify Build Artifacts
+      - name: Verify Build Artifacts
         run: |
-          echo "✅ Verifying build artifacts..."
-          
           # Check dist directory exists and is not empty
           if [[ ! -d "dist" ]] || [[ -z "$(ls -A dist/)" ]]; then
-            echo "❌ Build failed - dist directory is empty or missing"
+            echo "Build failed - dist directory is empty or missing"
             exit 1
           fi
-          
+
           # Check required files exist
           required_files=("odata-builder.js" "odata-builder.esm.js" "odata-builder.d.ts")
           for file in "${required_files[@]}"; do
             if [[ ! -f "dist/$file" ]]; then
-              echo "❌ Missing required file: $file"
+              echo "Missing required file: $file"
               exit 1
             fi
           done
-          
-          echo "📊 Build output:"
+
+          echo "Build output:"
           ls -la dist/
           echo ""
-          echo "📊 Bundle sizes:"
+          echo "Bundle sizes:"
           du -h dist/*
-          
 
-      - name: 📋 Extract Package Info
+      - name: Extract Package Info
         id: package-info
         run: |
           VERSION=$(jq -r '.version' package.json)
           NAME=$(jq -r '.name' package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "name=$NAME" >> $GITHUB_OUTPUT
-          echo "📦 Package: $NAME@$VERSION"
+          echo "Package: $NAME@$VERSION"
 
-      - name: 📤 Upload Build Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ github.run_id }}
@@ -741,64 +220,53 @@ jobs:
           retention-days: 30
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🚀 RELEASE PIPELINE
+  # RELEASE PIPELINE
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   release-validation:
-    name: 🏷️ Release Validation
+    name: Release Validation
     if: github.event_name == 'release'
     needs: [setup, build]
     runs-on: ubuntu-latest
     outputs:
       validated: ${{ steps.validate.outputs.valid }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🏷️ Validate Version Consistency
+      - name: Validate Version Consistency
         id: validate
         run: |
           PACKAGE_VERSION="${{ needs.build.outputs.version }}"
           RELEASE_TAG="${{ github.event.release.tag_name }}"
-          TAG_VERSION=${RELEASE_TAG#v}  # Remove 'v' prefix if present
-          
-          echo "📦 Package version: $PACKAGE_VERSION"
-          echo "🏷️ Release tag: $RELEASE_TAG"
-          echo "🔍 Comparing versions..."
-          
+          TAG_VERSION=${RELEASE_TAG#v}
+
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Release tag: $RELEASE_TAG"
+
           if [[ "$PACKAGE_VERSION" != "$TAG_VERSION" ]]; then
-            echo "❌ VERSION MISMATCH!"
+            echo "VERSION MISMATCH!"
             echo "Package: $PACKAGE_VERSION, Tag: $TAG_VERSION"
-            echo ""
-            echo "🔧 To fix:"
-            echo "1. Update package.json: npm version $TAG_VERSION --no-git-tag-version"
-            echo "2. Commit and push changes"
-            echo "3. Delete and recreate the release"
             exit 1
           fi
-          
+
           # Validate semantic versioning
           if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid version format: $PACKAGE_VERSION"
-            echo "Must be semantic version (MAJOR.MINOR.PATCH)"
+            echo "Invalid version format: $PACKAGE_VERSION"
             exit 1
           fi
-          
-          # Early version duplication check against NPM registry
-          echo "🔍 Checking if version already exists on NPM..."
+
+          # Check if version already exists on NPM
           PACKAGE_NAME="${{ needs.build.outputs.package-name }}"
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
-            echo "❌ Version $PACKAGE_VERSION already exists on NPM!"
-            echo "🔧 Please bump version in package.json and recreate the release"
+            echo "Version $PACKAGE_VERSION already exists on NPM!"
             exit 1
-          else
-            echo "✅ Version $PACKAGE_VERSION is available on NPM"
           fi
-          
-          echo "✅ Version validation passed: v$PACKAGE_VERSION"
+
+          echo "Version validation passed: v$PACKAGE_VERSION"
           echo "valid=true" >> $GITHUB_OUTPUT
 
   release-publish:
-    name: 📦 Publish to NPM
+    name: Publish to NPM
     if: github.event_name == 'release'
     needs: [setup, build, release-validation]
     runs-on: ubuntu-latest
@@ -809,216 +277,82 @@ jobs:
       name: npm-registry
       url: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}
     steps:
-      - name: 📥 Checkout (for package files)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
             package.json
             README.md
             LICENSE
-            
-      - name: 🔍 Validate Required Files
-        run: |
-          echo "🔍 Validating sparse checkout files..."
-          
-          # Check essential files exist
-          required_files=("package.json" "README.md")
-          for file in "${required_files[@]}"; do
-            if [[ ! -f "$file" ]]; then
-              echo "❌ Required file missing after sparse checkout: $file"
-              exit 1
-            fi
-          done
-          
-          # LICENSE is optional but warn if missing
-          if [[ ! -f "LICENSE" ]]; then
-            echo "⚠️ LICENSE file not found - this may be intentional"
-          fi
-          
-          echo "✅ All required files present after sparse checkout"
+            CHANGELOG.md
 
-      - name: 🔧 Setup Node.js for NPM
-        uses: actions/setup-node@v6
+      - name: Setup Node.js for NPM
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           registry-url: 'https://registry.npmjs.org'
 
-      - name: 📥 Download Build Artifacts
-        uses: actions/download-artifact@v6
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: ./dist
 
-      - name: 📦 Prepare NPM Package
+      - name: Prepare NPM Package
         run: |
-          echo "📦 Preparing package for NPM..."
-          
           # Copy package files to dist
           cp package.json dist/
           cp README.md dist/
           [[ -f LICENSE ]] && cp LICENSE dist/
-          
+          [[ -f CHANGELOG.md ]] && cp CHANGELOG.md dist/
+
           cd dist
-          
-          # Backup original package.json for verification
-          cp package.json package.json.backup
-          
+
           # Update package.json paths for NPM
           jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
-          
-          # Remove dev-only fields but preserve essential metadata
+
+          # Remove dev-only fields
           jq 'del(.devDependencies, .scripts)' package.json > tmp.json && mv tmp.json package.json
-          
-          echo "✅ Package preparation completed"
 
-      - name: 🔍 Validate NPM Package Structure
+      - name: Publish to NPM
         run: |
           cd dist
-          echo "🔍 Validating prepared NPM package..."
-          
-          # Validate JSON syntax
-          if ! jq empty package.json 2>/dev/null; then
-            echo "❌ Generated package.json is invalid JSON"
-            exit 1
-          fi
-          
-          # Check essential fields are present
-          REQUIRED_FIELDS=("name" "version" "main" "module" "types" "description" "author" "license")
-          for field in "${REQUIRED_FIELDS[@]}"; do
-            if ! jq -e ".$field" package.json >/dev/null 2>&1; then
-              echo "❌ Missing required field: $field"
-              exit 1
-            fi
-          done
-          
-          # Verify file paths point to existing files
-          MAIN_FILE=$(jq -r '.main' package.json)
-          MODULE_FILE=$(jq -r '.module' package.json)
-          TYPES_FILE=$(jq -r '.types' package.json)
-          
-          for file in "$MAIN_FILE" "$MODULE_FILE" "$TYPES_FILE"; do
-            if [[ ! -f "$file" ]]; then
-              echo "❌ Referenced file does not exist: $file"
-              exit 1
-            fi
-          done
-          
-          # Verify dev dependencies were removed
-          if jq -e '.devDependencies' package.json >/dev/null 2>&1; then
-            echo "❌ devDependencies should be removed from NPM package"
-            exit 1
-          fi
-          
-          # Show final package.json for verification
-          echo "📄 Final package.json content:"
-          jq '.' package.json
-          
-          echo "✅ Package structure validation passed"
-
-      - name: 🔍 Pre-publish Validation
-        run: |
-          cd dist
-          echo "🔍 Running pre-publish validation..."
-          
-          # Test npm pack (dry run)
-          npm pack --dry-run
-          
-          # Check if version already exists on NPM
-          CURRENT_VERSION="${{ needs.build.outputs.version }}"
-          if npm view "${{ needs.build.outputs.package-name }}@$CURRENT_VERSION" version >/dev/null 2>&1; then
-            echo "❌ Version $CURRENT_VERSION already exists on NPM!"
-            exit 1
-          fi
-          
-          # Verify package size is reasonable (less than 1MB)
-          PACK_SIZE=$(npm pack --dry-run --json 2>/dev/null | jq -r '.[0].size // 0')
-          if [[ $PACK_SIZE -gt 1048576 ]]; then
-            echo "⚠️ Package size is large: $(($PACK_SIZE / 1024))KB"
-            echo "Consider reviewing what's included in the package"
-          fi
-          
-          echo "✅ Pre-publish validation passed"
-
-      - name: 🚀 Publish to NPM
-        run: |
-          cd dist
-          echo "🚀 Publishing to NPM..."
           npm publish --access public
-          echo "✅ Successfully published ${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}"
+          echo "Successfully published ${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 📊 PIPELINE SUMMARY
+  # PIPELINE SUMMARY
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   pipeline-status:
-    name: 📊 Pipeline Summary
+    name: Pipeline Summary
     if: always()
     needs: [setup, quality-gate, test-matrix, build, release-validation, release-publish]
     runs-on: ubuntu-latest
     steps:
-      - name: 📊 Generate Pipeline Summary
+      - name: Generate Pipeline Summary
         run: |
-          echo "# 🚀 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Pipeline Information
-          echo "## 📋 Pipeline Information" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Event** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Node.js** | \`${{ needs.setup.outputs.node-version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Job Status Overview
-          echo "## 🔄 Job Status Overview" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Status | Duration |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔧 Setup | ${{ needs.setup.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔍 Quality Gate | ${{ needs.quality-gate.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Test Matrix | ${{ needs.test-matrix.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🏗️ Build | ${{ needs.build.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "| 🏷️ Release Validation | ${{ needs.release-validation.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-            echo "| 📦 NPM Publish | ${{ needs.release-publish.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Overall Status
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "## ❌ Pipeline Status: FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **Some jobs failed or were cancelled. Please check the logs above for details.**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ✅ Pipeline Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🎉 **All jobs completed successfully!**" >> $GITHUB_STEP_SUMMARY
-            
-            if [[ "${{ github.event_name }}" == "release" ]]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### 🎉 Release Information" >> $GITHUB_STEP_SUMMARY
-              echo "- **Package**: \`${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-              echo "- **NPM**: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}" >> $GITHUB_STEP_SUMMARY
-              echo "- **Install**: \`npm install ${{ needs.build.outputs.package-name }}\`" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "*Generated automatically by GitHub Actions CI/CD Pipeline*" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Setup | ${{ needs.setup.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Gate | ${{ needs.quality-gate.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Matrix | ${{ needs.test-matrix.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-      - name: 🎯 Final Status Check
-        run: |
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "❌ Pipeline failed - check individual job logs for details"
-            exit 1
-          else
-            echo "✅ Pipeline completed successfully!"
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "| Release Validation | ${{ needs.release-validation.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| NPM Publish | ${{ needs.release-publish.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
           fi
->>>>>>> origin/main
+
+      - name: Final Status Check
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "Pipeline failed"
+            exit 1
+          fi
+          echo "Pipeline completed successfully"
