@@ -1,6 +1,65 @@
 import { describe, it, assertType, expectTypeOf } from 'vitest';
 import { OrderByDescriptor, OrderByFields } from './orderby-descriptor.type';
 
+// ============================================================================
+// Interface definitions for testing
+// ============================================================================
+
+interface Address {
+    street: string;
+    city: string;
+    zip: number;
+}
+
+interface Company {
+    name: string;
+    address: Address;
+}
+
+interface User {
+    id: number;
+    name: string;
+    email: string;
+    address: Address;
+    company: Company;
+}
+
+describe('OrderByFields<T> with interfaces', () => {
+    it('should work with interface properties', () => {
+        expectTypeOf<OrderByFields<User>>().toEqualTypeOf<
+            | 'id'
+            | 'name'
+            | 'email'
+            | 'address'
+            | 'address/street'
+            | 'address/city'
+            | 'address/zip'
+            | 'company'
+            | 'company/name'
+            | 'company/address'
+            | 'company/address/street'
+            | 'company/address/city'
+            | 'company/address/zip'
+        >();
+    });
+
+    it('should handle nested interface references', () => {
+        expectTypeOf<OrderByFields<Company>>().toEqualTypeOf<
+            | 'name'
+            | 'address'
+            | 'address/street'
+            | 'address/city'
+            | 'address/zip'
+        >();
+    });
+
+    it('should handle flat interfaces', () => {
+        expectTypeOf<OrderByFields<Address>>().toEqualTypeOf<
+            'street' | 'city' | 'zip'
+        >();
+    });
+});
+
 describe('OrderByDescriptor<T>', () => {
     it('should allow ordering by valid fields', () => {
         type Item = { name: string; count: number };

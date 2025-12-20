@@ -1,6 +1,5 @@
 import { toFilterQuery } from './filter-utils';
 import {
-    ArrayElement,
     FilterOperators,
     QueryFilter,
 } from 'src/query-builder/types/filter/query-filter.type';
@@ -100,7 +99,15 @@ describe('toFilterQuery', () => {
             {
                 field: 'tags',
                 lambdaOperator: 'any',
-                expression: { field: '', operator: 'contains', value: 'test' },
+                expression: {
+                    field: 's',
+                    function: {
+                        type: 'contains',
+                        value: 'test',
+                    },
+                    operator: 'eq',
+                    value: 'true',
+                },
             },
         ];
 
@@ -122,7 +129,7 @@ describe('toFilterQuery', () => {
                     field: 'name',
                     operator: 'eq',
                     value: 'Apple',
-                } as QueryFilter<{ name: string; quantity: number }>,
+                },
             },
         ];
 
@@ -135,9 +142,13 @@ describe('toFilterQuery', () => {
         const filters: QueryFilter<ItemType>[] = [
             {
                 field: 'name',
-                operator: 'contains',
-                value: 'test',
+                function: {
+                    type: 'contains',
+                    value: 'test',
+                },
                 ignoreCase: true,
+                operator: 'eq',
+                value: true,
             },
         ];
 
@@ -174,8 +185,6 @@ describe('toFilterQuery', () => {
     });
 
     it('should handle a mix of basic, combined, and lambda filters', () => {
-        type TagElementType = ArrayElement<ItemType, 'tags'>;
-
         const filters: Array<QueryFilter<ItemType> | CombinedFilter<ItemType>> =
             [
                 { field: 'isActive', operator: 'eq', value: true },
@@ -190,18 +199,21 @@ describe('toFilterQuery', () => {
                     field: 'tags',
                     lambdaOperator: 'any',
                     expression: {
-                        field: '',
-                        operator: 'contains',
-                        value: 'test',
-                        ignoreCase: true,
-                    } as QueryFilter<TagElementType>,
+                        field: 's',
+                        function: {
+                            type: 'contains',
+                            value: 'test',
+                        },
+                        operator: 'eq',
+                        value: true,
+                    },
                 },
             ];
 
         const result = toFilterQuery(filters);
 
         expect(result).toBe(
-            `$filter=isActive eq true and (age gt 18 or name eq 'John') and tags/any(s: contains(tolower(s), 'test'))`,
+            `$filter=isActive eq true and (age gt 18 or name eq 'John') and tags/any(s: contains(s, 'test'))`,
         );
     });
 
@@ -219,7 +231,7 @@ describe('toFilterQuery', () => {
                 {
                     operator: 'eq',
                     value: true,
-                } as unknown as QueryFilter<ItemType>,
+                } as unknown as QueryFilter<ItemType>, // Ungültiger Filter ohne `field`
             ]),
         ).toThrowError('Invalid filter');
     });

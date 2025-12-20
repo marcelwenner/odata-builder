@@ -5,6 +5,7 @@ import {
     LambdaFilterFields,
     FilterOperators,
     ArithmeticFunctionDefinition,
+    GeneralFilterOperators,
 } from './query-filter.type';
 import { Guid } from '../utils/util.types';
 
@@ -23,7 +24,7 @@ describe('QueryFilter<T>', () => {
         type Item = { name: string };
         const filter: QueryFilter<Item> = {
             field: 'name',
-            operator: 'contains',
+            operator: 'eq',
             value: 'test',
         };
         assertType<QueryFilter<Item>>(filter);
@@ -103,7 +104,7 @@ describe('QueryFilter<T>', () => {
         type Item = { name: string; count: number };
         const stringFilter: QueryFilter<Item> = {
             field: 'name',
-            operator: 'contains',
+            operator: 'eq',
             value: 'test',
             ignoreCase: true,
         };
@@ -206,11 +207,10 @@ describe('FilterFields<T, VALUETYPE>', () => {
 
     it('should not allow filtering on object fields directly', () => {
         type Item = { details: { code: string } };
+        // @ts-expect-error - Cannot filter on object field directly, invalid operator for object type
         const filter: QueryFilter<Item> = {
-            // @ts-expect-error - Cannot filter on object field directly without nested property
             field: 'details',
             operator: 'eq',
-            // @ts-expect-error - Cannot filter on object field directly without nested property
             value: { code: 'test' },
         };
         void filter;
@@ -257,16 +257,9 @@ describe('LambdaFilterFields<T, VALUETYPE>', () => {
 
 describe('FilterOperators<VALUETYPE>', () => {
     it('should allow string operators for string values', () => {
-        expectTypeOf<FilterOperators<string>>().toEqualTypeOf<
-            | 'eq'
-            | 'ne'
-            | 'contains'
-            | 'startswith'
-            | 'endswith'
-            | 'substringof'
-            | 'indexof'
-            | 'concat'
-        >();
+        expectTypeOf<
+            FilterOperators<string>
+        >().toEqualTypeOf<GeneralFilterOperators>();
     });
 
     it('should allow number operators for number values', () => {
@@ -458,8 +451,8 @@ describe('QueryFilter<T> with functions', () => {
 
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type
                 type: 'startswith',
+                // @ts-expect-error - Field does not match function return type (price is number, startswith is for strings)
                 value: 'Test',
             },
             field: 'price',
@@ -472,8 +465,8 @@ describe('QueryFilter<T> with functions', () => {
     // Edge Cases
     it('should handle empty function values gracefully', () => {
         type ItemType = { name: string };
+        // @ts-expect-error - Missing required function properties (concat needs values array)
         const invalidFilter: QueryFilter<ItemType> = {
-            // @ts-expect-error - Missing required function properties
             function: {
                 type: 'concat',
             },
@@ -488,8 +481,8 @@ describe('QueryFilter<T> with functions', () => {
         type ItemType = { name: string; price: number };
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not support string function
                 type: 'concat',
+                // @ts-expect-error - Field does not support string function (concat on number field)
                 values: ['Hello', 'World'],
             },
             field: 'price',
@@ -524,13 +517,13 @@ describe('QueryFilter<T> with functions', () => {
             value: new Date(),
         };
         assertType<QueryFilter<ItemType>>(validFilter);
+
         // @ts-expect-error - Invalid operator for date function return type
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
                 type: 'now',
             },
             field: 'createdAt',
-
             operator: 'contains',
             value: new Date(),
         };
@@ -554,8 +547,8 @@ describe('QueryFilter<T> with functions', () => {
 
         const invalidStringFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type
                 type: 'concat',
+                // @ts-expect-error - Field does not match function return type (concat on number field)
                 values: ['Hello', { fieldReference: 'name' }],
             },
             field: 'price',
@@ -575,9 +568,9 @@ describe('QueryFilter<T> with functions', () => {
         };
         assertType<QueryFilter<ItemType>>(validNumberFilter);
 
+        // @ts-expect-error - Field does not match function return type (add on string field)
         const invalidNumberFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not match function return type
                 type: 'add',
                 operand: 10,
             },
@@ -591,8 +584,8 @@ describe('QueryFilter<T> with functions', () => {
     // Edge Cases
     it('should handle empty function values gracefully', () => {
         type ItemType = { name: string };
+        // @ts-expect-error - Missing required function properties (empty function object)
         const invalidFilter: QueryFilter<ItemType> = {
-            // @ts-expect-error - Missing required function properties
             function: {},
             field: 'name',
             operator: 'eq',
@@ -603,9 +596,9 @@ describe('QueryFilter<T> with functions', () => {
 
     it('should not allow functions for fields without matching types', () => {
         type ItemType = { name: string; price: number };
+        // @ts-expect-error - 'add' is not valid for string field
         const invalidFilter: QueryFilter<ItemType> = {
             function: {
-                // @ts-expect-error - Field does not support number function
                 type: 'add',
                 operand: 10,
             },

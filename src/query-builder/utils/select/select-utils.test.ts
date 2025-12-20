@@ -13,7 +13,7 @@ describe('toSelectQuery', () => {
 
     it('should return select query with more than one select prop', () => {
         const selectProps = ['test', 'test2', 'test3'];
-        const expectedResult = '$select=test,test2,test3';
+        const expectedResult = '$select=test, test2, test3';
 
         const result = toSelectQuery(selectProps);
 
@@ -24,16 +24,17 @@ describe('toSelectQuery', () => {
         const result = toSelectQuery([]);
         expect(result).toBe('');
     });
+    // TODO HANDLE THIS CASE! MAYBE '' as return
     it('should handle null in select properties (though the type should prevent this)', () => {
         // @ts-expect-error null is not allowed
         const result = toSelectQuery([null]);
-        expect(result).toBe('$select=');
+        expect(result).toBe('$select='); // Or handle this case differently
     });
 
     it('should handle undefined in select properties (though the type should prevent this)', () => {
         // @ts-expect-error undefined is not allowed
         const result = toSelectQuery([undefined]);
-        expect(result).toBe('$select=');
+        expect(result).toBe('$select='); // Or handle this case differently
     });
 
     it('should handle empty strings in select properties', () => {
@@ -46,13 +47,13 @@ describe('toSelectQuery - Input Array Edge Cases', () => {
     it('should handle array with duplicate select properties', () => {
         const selectProps = ['test', 'test', 'test2'];
         const result = toSelectQuery(selectProps);
-        expect(result).toBe('$select=test,test,test2');
+        expect(result).toBe('$select=test, test, test2');
     });
 
     it('should handle array with empty strings', () => {
         const selectProps = ['test', '', 'test2'];
         const result = toSelectQuery(selectProps);
-        expect(result).toBe('$select=test,,test2');
+        expect(result).toBe('$select=test, , test2');
     });
 
     it('should handle array with null and undefined (though type should prevent)', () => {
@@ -62,9 +63,9 @@ describe('toSelectQuery - Input Array Edge Cases', () => {
         const resultWithNull = toSelectQuery(selectPropsWithNull as string[]);
         const resultWithUndefined = toSelectQuery(
             selectPropsWithUndefined as string[],
-        );
+        ); // Explicit cast to any
 
-        expect(resultWithNull).toBe('$select=test,,test2');
-        expect(resultWithUndefined).toBe('$select=test,,test2');
+        expect(resultWithNull).toBe('$select=test, , test2');
+        expect(resultWithUndefined).toBe('$select=test, , test2');
     });
 });

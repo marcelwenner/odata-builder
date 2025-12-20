@@ -1,4 +1,4 @@
-name: 🚀 CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
@@ -20,14 +20,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🔧 SETUP & PREPARATION
+  # SETUP & PREPARATION
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   setup:
-    name: 🔧 Setup Environment
+    name: Setup Environment
     runs-on: ubuntu-latest
     outputs:
       node-version: ${{ env.NODE_VERSION }}
@@ -35,233 +35,184 @@ jobs:
       is-main: ${{ github.ref == 'refs/heads/main' }}
       is-pr: ${{ github.event_name == 'pull_request' }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
-        run: |
-          if npm ci --dry-run > /dev/null 2>&1; then
-            echo "✅ Using npm ci for clean install"
-            npm ci
-          else
-            echo "⚠️ Using npm install as fallback"
-            npm install
-          fi
+      - name: Install Dependencies
+        run: npm ci
 
-      - name: 🔒 Verify Secrets (Release only)
+      - name: Verify Secrets (Release only)
         if: github.event_name == 'release' && github.actor != 'dependabot[bot]'
         run: |
-          echo "🔒 Verifying required secrets for release..."
+          echo "Verifying required secrets for release..."
           if [[ -z "${{ secrets.NPM_TOKEN }}" ]]; then
-            echo "❌ NPM_TOKEN is required for releases"
+            echo "NPM_TOKEN is required for releases"
             exit 1
           fi
-          if [[ ! "${{ secrets.NPM_TOKEN }}" =~ ^npm_[A-Za-z0-9]{36}$ ]]; then
-            echo "❌ NPM_TOKEN format appears invalid"
-            exit 1
-          fi
-          
-          # Test NPM registry connectivity
-          echo "🔍 Testing NPM registry connectivity..."
-          
+
           # Configure NPM authentication
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          
+
           if ! npm whoami 2>/dev/null; then
-            echo "❌ Cannot authenticate with NPM registry"
-            echo "Please verify NPM_TOKEN has sufficient permissions"
+            echo "Cannot authenticate with NPM registry"
             exit 1
           fi
-          
+
           NPM_USER=$(npm whoami 2>/dev/null)
-          echo "✅ Authenticated as NPM user: $NPM_USER"
-          echo "✅ All secrets verified"
+          echo "Authenticated as NPM user: $NPM_USER"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🔍 CODE QUALITY GATE
+  # CODE QUALITY GATE
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   quality-gate:
-    name: 🔍 Quality Gate
+    name: Quality Gate
     needs: setup
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🎨 Lint Code
-        run: |
-          echo "🎨 Running ESLint..."
-          npm run lint
+      - name: Lint Code
+        run: npm run lint
 
-      - name: 📏 Check Format
-        run: |
-          echo "📏 Checking code formatting..."
-          npm run format -- --check
+      - name: Check Format
+        run: npm run format -- --check
         continue-on-error: true
 
-      - name: 🔒 Security Audit
+      - name: Security Audit
         if: needs.setup.outputs.is-main == 'true' || needs.setup.outputs.is-pr == 'true'
         run: |
-          echo "🔒 Running security audit..."
-          
+          echo "Running security audit..."
+
           # Check for high and critical vulnerabilities (fail CI)
-          echo "🔍 Checking for high/critical vulnerabilities..."
           if npm audit --audit-level=high --dry-run; then
-            echo "✅ No high or critical vulnerabilities found"
+            echo "No high or critical vulnerabilities found"
           else
-            echo "❌ High or critical security vulnerabilities detected!"
-            echo "🔧 Please run 'npm audit fix' to resolve issues"
+            echo "High or critical security vulnerabilities detected!"
             npm audit --audit-level=high
             exit 1
           fi
-          
-          # Check for moderate vulnerabilities (warn only)
-          echo "⚠️ Checking for moderate vulnerabilities..."
-          if ! npm audit --audit-level=moderate --dry-run; then
-            echo "⚠️ Moderate vulnerabilities found - consider reviewing:"
-            npm audit --audit-level=moderate
-          fi
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🧪 COMPREHENSIVE TESTING
+  # COMPREHENSIVE TESTING
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   test-matrix:
-    name: 🧪 Test Node.js ${{ matrix.node }} on ${{ matrix.os }}
+    name: Test Node.js ${{ matrix.node }} on ${{ matrix.os }}
     needs: [setup, quality-gate]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        node: [18, 20, 22]
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20, 22]
+        os: [ubuntu-latest]
         include:
-          - node: 20
+          - node: 22
             os: ubuntu-latest
             coverage: true
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js ${{ matrix.node }}
-        uses: actions/setup-node@v6
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🧪 Run Tests
+      - name: Run Tests
         run: npm test
 
-      - name: 📊 Generate Coverage (Node 20 + Ubuntu only)
+      - name: Generate Coverage
         if: matrix.coverage
         run: npm run coverage:ci
 
-      - name: 📈 Upload Coverage
-        if: matrix.coverage
-        run: |
-          if [[ -f "./coverage/lcov.info" ]]; then
-            echo "📈 Uploading coverage to Codecov..."
-          else
-            echo "⚠️ Coverage file not found - skipping upload"
-            echo "Expected: ./coverage/lcov.info"
-            echo "Available files:"
-            find . -name "*.info" -o -name "*coverage*" | head -10 || echo "No coverage files found"
-            exit 0
-          fi
-        continue-on-error: true
-        
-      - name: 📈 Codecov Upload
+      - name: Upload Coverage
         if: matrix.coverage && hashFiles('./coverage/lcov.info') != ''
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
-          verbose: true
         continue-on-error: true
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🏗️ BUILD & VERIFICATION
+  # BUILD & VERIFICATION
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   build:
-    name: 🏗️ Build & Package
+    name: Build & Package
     needs: [setup, quality-gate, test-matrix]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.package-info.outputs.version }}
       package-name: ${{ steps.package-info.outputs.name }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔧 Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           cache: 'npm'
 
-      - name: 📦 Install Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: 🏗️ Build Project
-        run: |
-          echo "🏗️ Building project..."
-          npm run build
+      - name: Build Project
+        run: npm run build
 
-      - name: ✅ Verify Build Artifacts
+      - name: Verify Build Artifacts
         run: |
-          echo "✅ Verifying build artifacts..."
-          
           # Check dist directory exists and is not empty
           if [[ ! -d "dist" ]] || [[ -z "$(ls -A dist/)" ]]; then
-            echo "❌ Build failed - dist directory is empty or missing"
+            echo "Build failed - dist directory is empty or missing"
             exit 1
           fi
-          
+
           # Check required files exist
           required_files=("odata-builder.js" "odata-builder.esm.js" "odata-builder.d.ts")
           for file in "${required_files[@]}"; do
             if [[ ! -f "dist/$file" ]]; then
-              echo "❌ Missing required file: $file"
+              echo "Missing required file: $file"
               exit 1
             fi
           done
-          
-          echo "📊 Build output:"
+
+          echo "Build output:"
           ls -la dist/
           echo ""
-          echo "📊 Bundle sizes:"
+          echo "Bundle sizes:"
           du -h dist/*
-          
 
-      - name: 📋 Extract Package Info
+      - name: Extract Package Info
         id: package-info
         run: |
           VERSION=$(jq -r '.version' package.json)
           NAME=$(jq -r '.name' package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "name=$NAME" >> $GITHUB_OUTPUT
-          echo "📦 Package: $NAME@$VERSION"
+          echo "Package: $NAME@$VERSION"
 
-      - name: 📤 Upload Build Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ github.run_id }}
@@ -269,64 +220,53 @@ jobs:
           retention-days: 30
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 🚀 RELEASE PIPELINE
+  # RELEASE PIPELINE
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   release-validation:
-    name: 🏷️ Release Validation
+    name: Release Validation
     if: github.event_name == 'release'
     needs: [setup, build]
     runs-on: ubuntu-latest
     outputs:
       validated: ${{ steps.validate.outputs.valid }}
     steps:
-      - name: 📥 Checkout
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🏷️ Validate Version Consistency
+      - name: Validate Version Consistency
         id: validate
         run: |
           PACKAGE_VERSION="${{ needs.build.outputs.version }}"
           RELEASE_TAG="${{ github.event.release.tag_name }}"
-          TAG_VERSION=${RELEASE_TAG#v}  # Remove 'v' prefix if present
-          
-          echo "📦 Package version: $PACKAGE_VERSION"
-          echo "🏷️ Release tag: $RELEASE_TAG"
-          echo "🔍 Comparing versions..."
-          
+          TAG_VERSION=${RELEASE_TAG#v}
+
+          echo "Package version: $PACKAGE_VERSION"
+          echo "Release tag: $RELEASE_TAG"
+
           if [[ "$PACKAGE_VERSION" != "$TAG_VERSION" ]]; then
-            echo "❌ VERSION MISMATCH!"
+            echo "VERSION MISMATCH!"
             echo "Package: $PACKAGE_VERSION, Tag: $TAG_VERSION"
-            echo ""
-            echo "🔧 To fix:"
-            echo "1. Update package.json: npm version $TAG_VERSION --no-git-tag-version"
-            echo "2. Commit and push changes"
-            echo "3. Delete and recreate the release"
             exit 1
           fi
-          
+
           # Validate semantic versioning
           if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid version format: $PACKAGE_VERSION"
-            echo "Must be semantic version (MAJOR.MINOR.PATCH)"
+            echo "Invalid version format: $PACKAGE_VERSION"
             exit 1
           fi
-          
-          # Early version duplication check against NPM registry
-          echo "🔍 Checking if version already exists on NPM..."
+
+          # Check if version already exists on NPM
           PACKAGE_NAME="${{ needs.build.outputs.package-name }}"
           if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
-            echo "❌ Version $PACKAGE_VERSION already exists on NPM!"
-            echo "🔧 Please bump version in package.json and recreate the release"
+            echo "Version $PACKAGE_VERSION already exists on NPM!"
             exit 1
-          else
-            echo "✅ Version $PACKAGE_VERSION is available on NPM"
           fi
-          
-          echo "✅ Version validation passed: v$PACKAGE_VERSION"
+
+          echo "Version validation passed: v$PACKAGE_VERSION"
           echo "valid=true" >> $GITHUB_OUTPUT
 
   release-publish:
-    name: 📦 Publish to NPM
+    name: Publish to NPM
     if: github.event_name == 'release'
     needs: [setup, build, release-validation]
     runs-on: ubuntu-latest
@@ -337,215 +277,82 @@ jobs:
       name: npm-registry
       url: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}
     steps:
-      - name: 📥 Checkout (for package files)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
             package.json
             README.md
             LICENSE
-            
-      - name: 🔍 Validate Required Files
-        run: |
-          echo "🔍 Validating sparse checkout files..."
-          
-          # Check essential files exist
-          required_files=("package.json" "README.md")
-          for file in "${required_files[@]}"; do
-            if [[ ! -f "$file" ]]; then
-              echo "❌ Required file missing after sparse checkout: $file"
-              exit 1
-            fi
-          done
-          
-          # LICENSE is optional but warn if missing
-          if [[ ! -f "LICENSE" ]]; then
-            echo "⚠️ LICENSE file not found - this may be intentional"
-          fi
-          
-          echo "✅ All required files present after sparse checkout"
+            CHANGELOG.md
 
-      - name: 🔧 Setup Node.js for NPM
-        uses: actions/setup-node@v6
+      - name: Setup Node.js for NPM
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ needs.setup.outputs.node-version }}
           registry-url: 'https://registry.npmjs.org'
 
-      - name: 📥 Download Build Artifacts
-        uses: actions/download-artifact@v6
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: ./dist
 
-      - name: 📦 Prepare NPM Package
+      - name: Prepare NPM Package
         run: |
-          echo "📦 Preparing package for NPM..."
-          
           # Copy package files to dist
           cp package.json dist/
           cp README.md dist/
           [[ -f LICENSE ]] && cp LICENSE dist/
-          
+          [[ -f CHANGELOG.md ]] && cp CHANGELOG.md dist/
+
           cd dist
-          
-          # Backup original package.json for verification
-          cp package.json package.json.backup
-          
+
           # Update package.json paths for NPM
           jq '.main = "odata-builder.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.module = "odata-builder.esm.js"' package.json > tmp.json && mv tmp.json package.json
           jq '.types = "odata-builder.d.ts"' package.json > tmp.json && mv tmp.json package.json
-          
-          # Remove dev-only fields but preserve essential metadata
+
+          # Remove dev-only fields
           jq 'del(.devDependencies, .scripts)' package.json > tmp.json && mv tmp.json package.json
-          
-          echo "✅ Package preparation completed"
 
-      - name: 🔍 Validate NPM Package Structure
+      - name: Publish to NPM
         run: |
           cd dist
-          echo "🔍 Validating prepared NPM package..."
-          
-          # Validate JSON syntax
-          if ! jq empty package.json 2>/dev/null; then
-            echo "❌ Generated package.json is invalid JSON"
-            exit 1
-          fi
-          
-          # Check essential fields are present
-          REQUIRED_FIELDS=("name" "version" "main" "module" "types" "description" "author" "license")
-          for field in "${REQUIRED_FIELDS[@]}"; do
-            if ! jq -e ".$field" package.json >/dev/null 2>&1; then
-              echo "❌ Missing required field: $field"
-              exit 1
-            fi
-          done
-          
-          # Verify file paths point to existing files
-          MAIN_FILE=$(jq -r '.main' package.json)
-          MODULE_FILE=$(jq -r '.module' package.json)
-          TYPES_FILE=$(jq -r '.types' package.json)
-          
-          for file in "$MAIN_FILE" "$MODULE_FILE" "$TYPES_FILE"; do
-            if [[ ! -f "$file" ]]; then
-              echo "❌ Referenced file does not exist: $file"
-              exit 1
-            fi
-          done
-          
-          # Verify dev dependencies were removed
-          if jq -e '.devDependencies' package.json >/dev/null 2>&1; then
-            echo "❌ devDependencies should be removed from NPM package"
-            exit 1
-          fi
-          
-          # Show final package.json for verification
-          echo "📄 Final package.json content:"
-          jq '.' package.json
-          
-          echo "✅ Package structure validation passed"
-
-      - name: 🔍 Pre-publish Validation
-        run: |
-          cd dist
-          echo "🔍 Running pre-publish validation..."
-          
-          # Test npm pack (dry run)
-          npm pack --dry-run
-          
-          # Check if version already exists on NPM
-          CURRENT_VERSION="${{ needs.build.outputs.version }}"
-          if npm view "${{ needs.build.outputs.package-name }}@$CURRENT_VERSION" version >/dev/null 2>&1; then
-            echo "❌ Version $CURRENT_VERSION already exists on NPM!"
-            exit 1
-          fi
-          
-          # Verify package size is reasonable (less than 1MB)
-          PACK_SIZE=$(npm pack --dry-run --json 2>/dev/null | jq -r '.[0].size // 0')
-          if [[ $PACK_SIZE -gt 1048576 ]]; then
-            echo "⚠️ Package size is large: $(($PACK_SIZE / 1024))KB"
-            echo "Consider reviewing what's included in the package"
-          fi
-          
-          echo "✅ Pre-publish validation passed"
-
-      - name: 🚀 Publish to NPM
-        run: |
-          cd dist
-          echo "🚀 Publishing to NPM..."
           npm publish --access public
-          echo "✅ Successfully published ${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}"
+          echo "Successfully published ${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  # 📊 PIPELINE SUMMARY
+  # PIPELINE SUMMARY
   # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   pipeline-status:
-    name: 📊 Pipeline Summary
+    name: Pipeline Summary
     if: always()
     needs: [setup, quality-gate, test-matrix, build, release-validation, release-publish]
     runs-on: ubuntu-latest
     steps:
-      - name: 📊 Generate Pipeline Summary
+      - name: Generate Pipeline Summary
         run: |
-          echo "# 🚀 CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Pipeline Information
-          echo "## 📋 Pipeline Information" >> $GITHUB_STEP_SUMMARY
-          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Event** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Node.js** | \`${{ needs.setup.outputs.node-version }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Job Status Overview
-          echo "## 🔄 Job Status Overview" >> $GITHUB_STEP_SUMMARY
-          echo "| Stage | Status | Duration |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔧 Setup | ${{ needs.setup.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🔍 Quality Gate | ${{ needs.quality-gate.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🧪 Test Matrix | ${{ needs.test-matrix.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| 🏗️ Build | ${{ needs.build.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            echo "| 🏷️ Release Validation | ${{ needs.release-validation.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-            echo "| 📦 NPM Publish | ${{ needs.release-publish.result == 'success' && '✅ Success' || '❌ Failed' }} | - |" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          # Overall Status
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "## ❌ Pipeline Status: FAILED" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "⚠️ **Some jobs failed or were cancelled. Please check the logs above for details.**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ✅ Pipeline Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "🎉 **All jobs completed successfully!**" >> $GITHUB_STEP_SUMMARY
-            
-            if [[ "${{ github.event_name }}" == "release" ]]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### 🎉 Release Information" >> $GITHUB_STEP_SUMMARY
-              echo "- **Package**: \`${{ needs.build.outputs.package-name }}@${{ needs.build.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
-              echo "- **NPM**: https://www.npmjs.com/package/${{ needs.build.outputs.package-name }}" >> $GITHUB_STEP_SUMMARY
-              echo "- **Install**: \`npm install ${{ needs.build.outputs.package-name }}\`" >> $GITHUB_STEP_SUMMARY
-            fi
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "*Generated automatically by GitHub Actions CI/CD Pipeline*" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Setup | ${{ needs.setup.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Gate | ${{ needs.quality-gate.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Matrix | ${{ needs.test-matrix.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ needs.build.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
 
-      - name: 🎯 Final Status Check
-        run: |
-          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
-            echo "❌ Pipeline failed - check individual job logs for details"
-            exit 1
-          else
-            echo "✅ Pipeline completed successfully!"
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "| Release Validation | ${{ needs.release-validation.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| NPM Publish | ${{ needs.release-publish.result == 'success' && 'Success' || 'Failed' }} |" >> $GITHUB_STEP_SUMMARY
           fi
+
+      - name: Final Status Check
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "Pipeline failed"
+            exit 1
+          fi
+          echo "Pipeline completed successfully"
