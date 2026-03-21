@@ -87,8 +87,8 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
 
             const value =
                 'removeQuotes' in filter && filter.removeQuotes
-                ? escapedValue
-                : `'${escapedValue}'`;
+                    ? escapedValue
+                    : `'${escapedValue}'`;
 
             if ('function' in filter && filter.function) {
                 const fieldForFunction =
@@ -249,7 +249,9 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                     return this.visitInFilter(prefixedFilter);
                 }
                 if (isNegatedFilter(subFilter)) {
-                    return this.visitNegatedFilter(subFilter as NegatedFilter<U>);
+                    return this.visitNegatedFilter(
+                        subFilter as NegatedFilter<U>,
+                    );
                 }
                 if (isHasFilter(subFilter)) {
                     const prefixedFilter = {
@@ -284,9 +286,7 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
 
     visitInFilter(filter: InFilter): string {
         const field = String(filter.field);
-        const formattedValues = filter.values.map(v =>
-            this.formatInValue(v),
-        );
+        const formattedValues = filter.values.map(v => this.formatInValue(v));
 
         if (this.context.legacyInOperator) {
             // OData 4.0 fallback: (field eq v1 or field eq v2 or ...)
@@ -347,10 +347,14 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         if (typeof value === 'number' || typeof value === 'boolean') {
             return String(value);
         }
-        throw new Error(`Unsupported value type in 'in' filter: ${typeof value}`);
+        throw new Error(
+            `Unsupported value type in 'in' filter: ${typeof value}`,
+        );
     }
 
-    private getTransformedField<U>(filter: Exclude<QueryFilter<U>, NegatedFilter<U>>): string {
+    private getTransformedField<U>(
+        filter: Exclude<QueryFilter<U>, NegatedFilter<U>>,
+    ): string {
         // Alle definierten Transformationen zusammenfassen
         const transforms = [
             ...('ignoreCase' in filter && filter.ignoreCase ? ['tolower'] : []),

@@ -1,6 +1,9 @@
 export { OdataQueryBuilder } from './query-builder/index';
 export { SearchExpressionBuilder } from './query-builder/builder/search-expression-builder';
-export { FilterBuilder, filter } from './query-builder/builder/filter-builder/index';
+export {
+    FilterBuilder,
+    filter,
+} from './query-builder/builder/filter-builder/index';
 export type {
     FilterExpression,
     FieldProxy,

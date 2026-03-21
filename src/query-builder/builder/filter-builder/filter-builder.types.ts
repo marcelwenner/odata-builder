@@ -62,7 +62,10 @@ export interface StringFieldOperations<
     // String functions returning values (can be chained with comparison)
     length(): NumberFieldOperations<T>;
     indexof(value: string): NumberFieldOperations<T>;
-    substring(start: number, length?: number): StringFieldOperations<T, string, AllowNull>;
+    substring(
+        start: number,
+        length?: number,
+    ): StringFieldOperations<T, string, AllowNull>;
     concat(...values: string[]): StringFieldOperations<T, string, AllowNull>;
 
     // String transforms
@@ -165,8 +168,12 @@ export interface GuidFieldOperations<
  * Array-specific operations (for lambda filters)
  */
 export interface ArrayFieldOperations<T, E> {
-    any(predicate: (element: FieldProxy<E>) => FilterExpression<E>): FilterExpression<T>;
-    all(predicate: (element: FieldProxy<E>) => FilterExpression<E>): FilterExpression<T>;
+    any(
+        predicate: (element: FieldProxy<E>) => FilterExpression<E>,
+    ): FilterExpression<T>;
+    all(
+        predicate: (element: FieldProxy<E>) => FilterExpression<E>,
+    ): FilterExpression<T>;
 }
 
 // ============================================================================
@@ -189,13 +196,10 @@ export type PrimitiveArrayWrapper<V> = { s: V };
  * Uses [V] extends [...] pattern to prevent distributive conditional types
  * This ensures literal unions like 'open' | 'closed' are preserved as-is
  */
- 
-/* eslint-disable @typescript-eslint/no-redundant-type-constituents */
-type FieldOperationsFor<
-    TRoot,
+
+type FieldOperationsFor<TRoot, V, AllowNull extends boolean = false> = [
     V,
-    AllowNull extends boolean = false,
-> = [V] extends [Guid]
+] extends [Guid]
     ? GuidFieldOperations<TRoot, AllowNull>
     : [V] extends [string]
       ? StringFieldOperations<TRoot, V & string, AllowNull>
@@ -212,7 +216,6 @@ type FieldOperationsFor<
               : [V] extends [object]
                 ? NestedFieldProxy<TRoot, V>
                 : never;
-/* eslint-enable @typescript-eslint/no-redundant-type-constituents */
 
 /**
  * NestedFieldProxy for accessing nested object properties while preserving the root type
@@ -220,7 +223,11 @@ type FieldOperationsFor<
  * T is the current nested object type (for property access)
  */
 export type NestedFieldProxy<TRoot, T> = {
-    [K in keyof T]-?: FieldOperationsFor<TRoot, NonNullable<T[K]>, IncludesNull<T[K]>>;
+    [K in keyof T]-?: FieldOperationsFor<
+        TRoot,
+        NonNullable<T[K]>,
+        IncludesNull<T[K]>
+    >;
 };
 
 /**
@@ -236,7 +243,11 @@ export type NestedFieldProxy<TRoot, T> = {
  * // - x.nullableName (string | null) -> StringFieldOperations<User, string, true>  (allows eq(null))
  */
 export type FieldProxy<T> = {
-    [K in keyof T]-?: FieldOperationsFor<T, NonNullable<T[K]>, IncludesNull<T[K]>>;
+    [K in keyof T]-?: FieldOperationsFor<
+        T,
+        NonNullable<T[K]>,
+        IncludesNull<T[K]>
+    >;
 };
 
 // ============================================================================

@@ -27,9 +27,7 @@ describe('ExpandFields<T>', () => {
     describe('with interface types', () => {
         it('should work with interface properties', () => {
             expectTypeOf<ExpandFields<User>>().toEqualTypeOf<
-                | 'address'
-                | 'company'
-                | 'company/location'
+                'address' | 'company' | 'company/location'
             >();
         });
 

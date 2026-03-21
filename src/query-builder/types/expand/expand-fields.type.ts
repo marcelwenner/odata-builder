@@ -9,7 +9,7 @@ export type ExpandFields<T, Depth extends number = 5> = Depth extends 0
               ? // Check for empty object
                 HasKeys<NonNullable<T[K]>> extends true
                   ? // If there's at least one key, include `K` and deeper expansions
-                    | K
+                        | K
                         | (Depth extends 1
                               ? never
                               : `${K}/${ExpandFields<NonNullable<T[K]>, PrevDepth<Depth>>}`)

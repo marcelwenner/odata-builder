@@ -72,5 +72,5 @@ export const isQueryFilter = <T>(filter: unknown): filter is QueryFilter<T> => {
         return true;
     }
 
-    return false
+    return false;
 };

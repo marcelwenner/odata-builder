@@ -809,7 +809,9 @@ describe('FilterBuilder', () => {
 
         it('should build nested array filter', () => {
             const result = new FilterBuilder<TestUser>()
-                .where(x => x.orders.any(o => o.items.any(i => i.quantity.gt(5))))
+                .where(x =>
+                    x.orders.any(o => o.items.any(i => i.quantity.gt(5))),
+                )
                 .build();
 
             expect(result).toEqual({
@@ -937,10 +939,8 @@ describe('FilterBuilder', () => {
 
         it('should throw error for empty values array', () => {
             expect(() => {
-                new FilterBuilder<TestUser>()
-                    .where(x => x.name.in([]))
-                    .build();
-            }).toThrow("FilterBuilder: in() requires at least one value");
+                new FilterBuilder<TestUser>().where(x => x.name.in([])).build();
+            }).toThrow('FilterBuilder: in() requires at least one value');
         });
 
         it('should build in filter with null values for nullable fields', () => {
@@ -1006,7 +1006,7 @@ describe('FilterBuilder', () => {
         it('should throw error when using not() on empty builder', () => {
             expect(() => {
                 new FilterBuilder<TestUser>().not();
-            }).toThrow("FilterBuilder: Cannot use .not() on empty builder");
+            }).toThrow('FilterBuilder: Cannot use .not() on empty builder');
         });
 
         it('should allow chaining after not()', () => {
@@ -1021,7 +1021,11 @@ describe('FilterBuilder', () => {
                 filters: [
                     {
                         type: 'not',
-                        filter: { field: 'name', operator: 'eq', value: 'John' },
+                        filter: {
+                            field: 'name',
+                            operator: 'eq',
+                            value: 'John',
+                        },
                     },
                     { field: 'isActive', operator: 'eq', value: true },
                 ],
@@ -1063,7 +1067,11 @@ describe('FilterBuilder', () => {
             expect(result).toEqual({
                 logic: 'and',
                 filters: [
-                    { field: 'name', operator: 'has', value: "Namespace.Permission'Admin'" },
+                    {
+                        field: 'name',
+                        operator: 'has',
+                        value: "Namespace.Permission'Admin'",
+                    },
                     { field: 'isActive', operator: 'eq', value: true },
                 ],
             });
@@ -1121,7 +1129,9 @@ describe('FilterBuilder', () => {
 describe('createFieldProxy', () => {
     it('should return undefined for symbol properties', () => {
         const proxy = createFieldProxy<TestUser>();
-        expect((proxy as unknown as Record<symbol, unknown>)[Symbol('test')]).toBeUndefined();
+        expect(
+            (proxy as unknown as Record<symbol, unknown>)[Symbol('test')],
+        ).toBeUndefined();
     });
 
     it('should throw for unknown operations', () => {
@@ -1147,11 +1157,7 @@ describe('OdataQueryBuilder.filter() with FilterBuilder', () => {
 
     it('should work with complex filter', () => {
         const query = new OdataQueryBuilder<TestUser>()
-            .filter(f =>
-                f
-                    .where(x => x.name.eq('John'))
-                    .and(x => x.age.gt(18)),
-            )
+            .filter(f => f.where(x => x.name.eq('John')).and(x => x.age.gt(18)))
             .toQuery();
 
         expect(query).toBe("?$filter=(name eq 'John' and age gt 18)");
@@ -1216,9 +1222,7 @@ describe('OdataQueryBuilder.filter() with FilterBuilder', () => {
     it('should work with OR combined filter', () => {
         const query = new OdataQueryBuilder<TestUser>()
             .filter(f =>
-                f
-                    .where(x => x.name.eq('John'))
-                    .or(x => x.name.eq('Jane')),
+                f.where(x => x.name.eq('John')).or(x => x.name.eq('Jane')),
             )
             .toQuery();
 
@@ -1240,7 +1244,9 @@ describe('OdataQueryBuilder.filter() with FilterBuilder', () => {
             .top(10)
             .toQuery();
 
-        expect(query).toBe('?$filter=isActive eq true&$top=10&$select=name, age');
+        expect(query).toBe(
+            '?$filter=isActive eq true&$top=10&$select=name, age',
+        );
     });
 
     it('should still support object-based filter', () => {
@@ -1321,9 +1327,7 @@ describe('FilterBuilder Apostrophe Escaping', () => {
 
     it('should escape apostrophes in lambda expressions', () => {
         const query = new OdataQueryBuilder<TestUser>()
-            .filter(f =>
-                f.where(x => x.tags.any(t => t.s.eq("dev's"))),
-            )
+            .filter(f => f.where(x => x.tags.any(t => t.s.eq("dev's"))))
             .toQuery();
 
         expect(query).toBe("?$filter=tags/any(s: s eq 'dev''s')");

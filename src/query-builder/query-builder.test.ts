@@ -171,31 +171,31 @@ describe('query-builder', () => {
         expect(queryBuilder.toQuery()).toBe(expectedQuery);
     });
 
-    it.each([
-        { ignoreCase: true },
-        { ignoreCase: false },
-    ])('should add a contains filter to the query', filterOption => {
-        type ItemType = {
-            x: string;
-        };
+    it.each([{ ignoreCase: true }, { ignoreCase: false }])(
+        'should add a contains filter to the query',
+        filterOption => {
+            type ItemType = {
+                x: string;
+            };
 
-        const filter = {
-            field: 'x' as const,
-            function: { type: 'contains' as const, value: '1' },
-            operator: 'eq' as const,
-            value: true,
-            ignoreCase: filterOption.ignoreCase,
-        };
+            const filter = {
+                field: 'x' as const,
+                function: { type: 'contains' as const, value: '1' },
+                operator: 'eq' as const,
+                value: true,
+                ignoreCase: filterOption.ignoreCase,
+            };
 
-        const expectedQuery = `?$filter=contains(${filterOption.ignoreCase ? 'tolower(' : ''}x${
-            filterOption.ignoreCase ? ')' : ''
-        }, '1')`;
+            const expectedQuery = `?$filter=contains(${filterOption.ignoreCase ? 'tolower(' : ''}x${
+                filterOption.ignoreCase ? ')' : ''
+            }, '1')`;
 
-        const queryBuilder = new OdataQueryBuilder<ItemType>();
-        queryBuilder.filter(filter);
+            const queryBuilder = new OdataQueryBuilder<ItemType>();
+            queryBuilder.filter(filter);
 
-        expect(queryBuilder.toQuery()).toBe(expectedQuery);
-    });
+            expect(queryBuilder.toQuery()).toBe(expectedQuery);
+        },
+    );
 
     it('should add space before and when combining two filters', () => {
         interface MyAwesomeDto {
@@ -981,8 +981,8 @@ describe('OdataQueryBuilder with in operator', () => {
     type ItemType = { status: string; age: number; name: string };
 
     it('should generate OData 4.01 in syntax by default', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f => f.where(x => x.status.in(['active', 'pending'])),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f.where(x => x.status.in(['active', 'pending'])),
         );
 
         expect(queryBuilder.toQuery()).toBe(
@@ -1001,16 +1001,16 @@ describe('OdataQueryBuilder with in operator', () => {
     });
 
     it('should handle in filter with number values', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f => f.where(x => x.age.in([18, 21, 65])),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f.where(x => x.age.in([18, 21, 65])),
         );
 
         expect(queryBuilder.toQuery()).toBe('?$filter=age in (18, 21, 65)');
     });
 
     it('should escape single quotes in values', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f => f.where(x => x.name.in(["O'Reilly", "McDonald's"])),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f.where(x => x.name.in(["O'Reilly", "McDonald's"])),
         );
 
         expect(queryBuilder.toQuery()).toBe(
@@ -1019,11 +1019,10 @@ describe('OdataQueryBuilder with in operator', () => {
     });
 
     it('should combine in filter with other filters', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f =>
-                f
-                    .where(x => x.status.in(['active', 'pending']))
-                    .and(x => x.age.gt(18)),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f
+                .where(x => x.status.in(['active', 'pending']))
+                .and(x => x.age.gt(18)),
         );
 
         expect(queryBuilder.toQuery()).toBe(
@@ -1034,11 +1033,10 @@ describe('OdataQueryBuilder with in operator', () => {
     it('should use parentheses correctly in legacy mode with combined filters', () => {
         const queryBuilder = new OdataQueryBuilder<ItemType>({
             legacyInOperator: true,
-        }).filter(
-            f =>
-                f
-                    .where(x => x.status.in(['active', 'pending']))
-                    .and(x => x.age.gt(18)),
+        }).filter(f =>
+            f
+                .where(x => x.status.in(['active', 'pending']))
+                .and(x => x.age.gt(18)),
         );
 
         expect(queryBuilder.toQuery()).toBe(
@@ -1051,20 +1049,19 @@ describe('OdataQueryBuilder with not operator', () => {
     type ItemType = { name: string; age: number; isActive: boolean };
 
     it('should negate a simple filter', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f => f.where(x => x.name.eq('John')).not(),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f.where(x => x.name.eq('John')).not(),
         );
 
         expect(queryBuilder.toQuery()).toBe("?$filter=not (name eq 'John')");
     });
 
     it('should negate a combined filter', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f =>
-                f
-                    .where(x => x.name.eq('John'))
-                    .and(x => x.age.gt(18))
-                    .not(),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f
+                .where(x => x.name.eq('John'))
+                .and(x => x.age.gt(18))
+                .not(),
         );
 
         expect(queryBuilder.toQuery()).toBe(
@@ -1073,20 +1070,21 @@ describe('OdataQueryBuilder with not operator', () => {
     });
 
     it('should negate a contains filter', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f => f.where(x => x.name.contains('test')).not(),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f.where(x => x.name.contains('test')).not(),
         );
 
-        expect(queryBuilder.toQuery()).toBe("?$filter=not (contains(name, 'test'))");
+        expect(queryBuilder.toQuery()).toBe(
+            "?$filter=not (contains(name, 'test'))",
+        );
     });
 
     it('should chain not with other filters', () => {
-        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(
-            f =>
-                f
-                    .where(x => x.name.eq('John'))
-                    .not()
-                    .and(x => x.isActive.isTrue()),
+        const queryBuilder = new OdataQueryBuilder<ItemType>().filter(f =>
+            f
+                .where(x => x.name.eq('John'))
+                .not()
+                .and(x => x.isActive.isTrue()),
         );
 
         expect(queryBuilder.toQuery()).toBe(

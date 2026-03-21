@@ -12,7 +12,12 @@ describe('CombinedFilter<T>', () => {
                 {
                     logic: 'or',
                     filters: [
-                        { field: 'name', function: { type: 'contains', value: 'test' }, operator: 'eq', value: true },
+                        {
+                            field: 'name',
+                            function: { type: 'contains', value: 'test' },
+                            operator: 'eq',
+                            value: true,
+                        },
                     ],
                 },
             ],
@@ -39,7 +44,12 @@ describe('CombinedFilter<T>', () => {
                 {
                     logic: 'or',
                     filters: [
-                        { field: 'name', function: { type: 'contains', value: 'test' }, operator: 'eq', value: true },
+                        {
+                            field: 'name',
+                            function: { type: 'contains', value: 'test' },
+                            operator: 'eq',
+                            value: true,
+                        },
                         {
                             logic: 'and',
                             filters: [
@@ -100,7 +110,12 @@ describe('CombinedFilter<T>', () => {
                 {
                     logic: 'or',
                     filters: [
-                        { field: 'name', function: { type: 'contains', value: 'test' }, operator: 'eq', value: true },
+                        {
+                            field: 'name',
+                            function: { type: 'contains', value: 'test' },
+                            operator: 'eq',
+                            value: true,
+                        },
                         {
                             logic: 'and',
                             filters: [

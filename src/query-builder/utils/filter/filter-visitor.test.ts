@@ -492,7 +492,9 @@ describe('ODataFilterVisitor with in operator', () => {
         let visitor: ODataFilterVisitor<ItemType>;
 
         beforeEach(() => {
-            visitor = new ODataFilterVisitor<ItemType>({ legacyInOperator: true });
+            visitor = new ODataFilterVisitor<ItemType>({
+                legacyInOperator: true,
+            });
         });
 
         it('should use or fallback for string values', () => {
@@ -739,7 +741,9 @@ describe('ODataFilterVisitor with has operator', () => {
 
         const result = visitor.visitCombinedFilter(filter);
 
-        expect(result).toBe("(color eq 'Blue' or style has Sales.Color'Yellow')");
+        expect(result).toBe(
+            "(color eq 'Blue' or style has Sales.Color'Yellow')",
+        );
     });
 });
 
@@ -818,7 +822,7 @@ describe('ODataFilterVisitor Apostrophe Escaping', () => {
             field: 'name',
             operator: 'eq',
             value: 'result',
-            function: { type: 'concat', values: ["John's", "book"] },
+            function: { type: 'concat', values: ["John's", 'book'] },
         };
 
         const result = visitor.visitBasicFilter(filter);

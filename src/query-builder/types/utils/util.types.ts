@@ -31,10 +31,10 @@ export type IsObjectType<T> = T extends object
     ? T extends readonly unknown[]
         ? false
         : T extends (...args: unknown[]) => unknown
+          ? false
+          : T extends Date
             ? false
-            : T extends Date
-                ? false
-                : true
+            : true
     : false;
 
 export type PrevDepth<T extends number> = [

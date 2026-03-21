@@ -10,7 +10,16 @@ import {
 // Known Operations - Used to distinguish field access from method calls
 // ============================================================================
 
-const COMPARISON_OPS = ['eq', 'ne', 'gt', 'ge', 'lt', 'le', 'in', 'has'] as const;
+const COMPARISON_OPS = [
+    'eq',
+    'ne',
+    'gt',
+    'ge',
+    'lt',
+    'le',
+    'in',
+    'has',
+] as const;
 const STRING_PREDICATES = ['contains', 'startswith', 'endswith'] as const;
 const STRING_FUNCTIONS = ['length', 'indexof', 'substring', 'concat'] as const;
 const STRING_TRANSFORMS = ['tolower', 'toupper', 'trim'] as const;

@@ -66,10 +66,7 @@ export class FilterBuilder<T> implements FilterBuilderLike<T> {
             return this;
         }
 
-        return new FilterBuilder<T>([
-            ...this.parts,
-            { filter },
-        ]);
+        return new FilterBuilder<T>([...this.parts, { filter }]);
     }
 
     /**
@@ -93,10 +90,7 @@ export class FilterBuilder<T> implements FilterBuilderLike<T> {
             return this;
         }
 
-        return new FilterBuilder<T>([
-            ...this.parts,
-            { logic: 'and', filter },
-        ]);
+        return new FilterBuilder<T>([...this.parts, { logic: 'and', filter }]);
     }
 
     /**
@@ -120,10 +114,7 @@ export class FilterBuilder<T> implements FilterBuilderLike<T> {
             return this;
         }
 
-        return new FilterBuilder<T>([
-            ...this.parts,
-            { logic: 'or', filter },
-        ]);
+        return new FilterBuilder<T>([...this.parts, { logic: 'or', filter }]);
     }
 
     /**
