@@ -124,9 +124,8 @@ describe('Forbidden Operations', () => {
         });
     });
 
-    it('should NOT allow gt on string', () => {
+    it('should allow gt on string (lexicographic comparison)', () => {
         new FilterBuilder<User>().where(x => {
-            // @ts-expect-error - gt is not on StringFieldOperations
             return x.name.gt('test');
         });
     });

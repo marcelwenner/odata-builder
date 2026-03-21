@@ -54,7 +54,6 @@ describe('isQueryFilter', () => {
             { field: 'name' },
             { operator: 'eq' },
             { value: 'test' },
-            { field: 'age', operator: 'lt', value: 'thirty' },
             { field: 'tags', lambdaOperator: 'any' },
             { lambdaOperator: 'any', expression: {} },
             { field: 'tags', expression: {} },

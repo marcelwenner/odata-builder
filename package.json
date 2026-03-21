@@ -1,6 +1,6 @@
 {
     "name": "odata-builder",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Type-safe OData v4.01 query builder for TypeScript with compile-time validation. Fluent FilterBuilder API, lambda expressions (any/all), in/not/has operators.",
     "author": "Marcel Wenner (https://github.com/marcelwenner)",
     "license": "MIT",

@@ -4,6 +4,10 @@ export const operatorTypeMap: Record<string, string[]> = {
     string: [
         'eq',
         'ne',
+        'gt',
+        'ge',
+        'lt',
+        'le',
         'contains',
         'startswith',
         'endswith',

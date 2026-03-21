@@ -70,6 +70,12 @@ export interface StringFieldOperations<
     toupper(): StringFieldOperations<T, V, AllowNull>;
     trim(): StringFieldOperations<T, V, AllowNull>;
 
+    // Comparison operators (lexicographic - OData v4.01 spec 5.1.1.1.3)
+    gt(value: V): FilterExpression<T>;
+    ge(value: V): FilterExpression<T>;
+    lt(value: V): FilterExpression<T>;
+    le(value: V): FilterExpression<T>;
+
     /**
      * Enum flag check using 'has' operator
      * Value must be a valid OData enum literal (e.g., "Sales.Color'Yellow'")

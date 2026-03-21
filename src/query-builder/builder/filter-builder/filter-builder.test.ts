@@ -97,6 +97,56 @@ describe('FilterBuilder', () => {
         });
     });
 
+    describe('String Comparison Operations', () => {
+        it('should build gt filter for string', () => {
+            const result = new FilterBuilder<TestUser>()
+                .where(x => x.name.gt('M'))
+                .build();
+
+            expect(result).toEqual({
+                field: 'name',
+                operator: 'gt',
+                value: 'M',
+            });
+        });
+
+        it('should build ge filter for string', () => {
+            const result = new FilterBuilder<TestUser>()
+                .where(x => x.name.ge('M'))
+                .build();
+
+            expect(result).toEqual({
+                field: 'name',
+                operator: 'ge',
+                value: 'M',
+            });
+        });
+
+        it('should build lt filter for string', () => {
+            const result = new FilterBuilder<TestUser>()
+                .where(x => x.name.lt('Z'))
+                .build();
+
+            expect(result).toEqual({
+                field: 'name',
+                operator: 'lt',
+                value: 'Z',
+            });
+        });
+
+        it('should build le filter for string', () => {
+            const result = new FilterBuilder<TestUser>()
+                .where(x => x.name.le('Z'))
+                .build();
+
+            expect(result).toEqual({
+                field: 'name',
+                operator: 'le',
+                value: 'Z',
+            });
+        });
+    });
+
     describe('Number Operations', () => {
         it('should build gt filter', () => {
             const result = new FilterBuilder<TestUser>()

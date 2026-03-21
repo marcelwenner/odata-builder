@@ -295,7 +295,7 @@ export type LambdaFilterFields<T, VALUETYPE> = {
 
 export type GeneralFilterOperators = 'eq' | 'ne';
 
-export type StringFilterOperators = GeneralFilterOperators;
+export type StringFilterOperators = GeneralFilterOperators | NumberFilterOperators;
 
 export type StringTransform = 'tolower' | 'toupper' | 'trim' | 'length';
 export type DateTransform =
