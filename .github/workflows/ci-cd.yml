@@ -281,7 +281,7 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Download Build Artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: build-artifacts-${{ github.run_id }}
           path: ./dist
