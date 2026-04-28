@@ -12,7 +12,7 @@ import {
     FilterRenderContext,
 } from './utils/filter/filter-utils';
 import { CombinedFilter } from './types/filter/combined-filter.type';
-import { ExpandFields } from './types/expand/expand-fields.type';
+import { ExpandInput } from './types/expand/expand-descriptor.type';
 import { toExpandQuery } from './utils/expand/expand-util';
 import { toTopQuery } from './utils/top/top-utils';
 import { toSkipQuery } from './utils/skip/skip-utils';
@@ -269,21 +269,45 @@ export class OdataQueryBuilder<T> {
     /**
      * Expands navigation properties to include related entities.
      *
-     * @param expandFields - Navigation properties to expand
+     * Supports both simple string paths and objects with nested subquery options
+     * ($select, $filter, $orderby, $top, $skip, $count, $search, and nested $expand).
+     *
+     * @param expandFields - Navigation properties to expand, either as string paths
+     *                        or objects with subquery options
      * @returns This builder for chaining
      * @throws Error if any expand field is invalid
      *
      * @example
+     * // Simple expand
      * builder.expand('orders')  // $expand=orders
      *
      * @example
-     * // Nested expand with select
-     * builder.expand({ orders: { select: ['id', 'price'] } })
+     * // Expand with subquery options
+     * builder.expand({
+     *     orders: {
+     *         select: ['id', 'price'],
+     *         filter: f => f.where(x => x.price.gt(100)),
+     *         top: 5,
+     *         orderBy: [{ field: 'price', orderDirection: 'desc' }]
+     *     }
+     * })
+     * // $expand=orders($select=id, price;$filter=price gt 100;$orderby=price desc;$top=5)
+     *
+     * @example
+     * // Nested expand with subqueries
+     * builder.expand({
+     *     orders: {
+     *         select: ['id'],
+     *         expand: [{ items: { select: ['name', 'price'] } }]
+     *     }
+     * })
+     * // $expand=orders($select=id;$expand=items($select=name, price))
      */
-    expand(...expandFields: ExpandFields<T>[]): this {
+    expand(...expandFields: ExpandInput<T>[]): this {
         if (expandFields.length === 0) return this;
-        if (expandFields.some(field => !field))
-            throw new Error('Field missing for expand');
+        for (const field of expandFields) {
+            if (!field) throw new Error('Field missing for expand');
+        }
 
         return this.addComponent('expand', expandFields);
     }
@@ -413,7 +437,10 @@ export class OdataQueryBuilder<T> {
                     Array.from(component as Set<Extract<keyof T, string>>),
                 ),
             expand: component =>
-                toExpandQuery<T>(Array.from(component as Set<ExpandFields<T>>)),
+                toExpandQuery<T>(
+                    Array.from(component as Set<ExpandInput<T>>),
+                    this.filterContext,
+                ),
             orderBy: component =>
                 toOrderByQuery(
                     Array.from(component as Set<OrderByDescriptor<T>>),

@@ -1,7 +1,7 @@
 import { CombinedFilter } from '../filter/combined-filter.type';
 import { QueryFilter } from '../filter/query-filter.type';
 import { OrderByDescriptor } from '../orderby/orderby-descriptor.type';
-import { ExpandFields } from '../expand/expand-fields.type';
+import { ExpandInput } from '../expand/expand-descriptor.type';
 import { SelectFields } from '../select/select-fields.type';
 
 export type Guid = string & { _type: Guid };
@@ -17,7 +17,7 @@ export interface QueryComponents<T> {
     skip?: number;
     select?: Set<SelectFields<Required<T>>>;
     orderBy?: Set<OrderByDescriptor<T>>;
-    expand?: Set<ExpandFields<Required<T>>>;
+    expand?: Set<ExpandInput<Required<T>>>;
     search?: string;
 }
 
@@ -45,3 +45,21 @@ export type PrevDepth<T extends number> = [
     3, // 4
     4, // 5
 ][T];
+
+/**
+ * Unwraps an array type to its element type.
+ * If T is not an array, returns T unchanged.
+ */
+export type UnwrapArray<T> = T extends readonly (infer U)[] ? U : T;
+
+/**
+ * Checks if a type represents an expandable navigation property:
+ * either a plain object or an array of objects.
+ */
+export type IsExpandableType<T> = IsObjectType<T> extends true
+    ? true
+    : T extends readonly (infer U)[]
+      ? IsObjectType<NonNullable<U>> extends true
+          ? true
+          : false
+      : false;

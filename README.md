@@ -316,12 +316,51 @@ new OdataQueryBuilder<User>()
 
 ### expand
 
-Include related entities. Supports nested paths:
+Include related entities. Supports nested paths and **subqueries** with `$select`, `$filter`, `$orderby`, `$top`, `$skip`, `$count`, `$search`, and nested `$expand`:
 
 ```typescript
+// Simple expand
 new OdataQueryBuilder<User>().expand('company', 'company/address').toQuery();
-// ?$expand=company,company/address
+// ?$expand=company, company/address
+
+// Expand with subquery options
+new OdataQueryBuilder<User>()
+    .expand({
+        company: {
+            select: ['name', 'location'],
+            filter: f => f.where(x => x.name.contains('Corp')),
+            orderBy: [{ field: 'name', orderDirection: 'asc' }],
+            top: 5,
+        },
+    })
+    .toQuery();
+// ?$expand=company($select=name, location;$filter=contains(name, 'Corp');$orderby=name asc;$top=5)
+
+// Nested expand with subqueries (deeply nested)
+new OdataQueryBuilder<User>()
+    .expand({
+        company: {
+            select: ['name'],
+            expand: [{
+                address: {
+                    select: ['city', 'zip'],
+                },
+            }],
+        },
+    })
+    .toQuery();
+// ?$expand=company($select=name;$expand=address($select=city, zip))
+
+// Mix simple and subquery expands
+new OdataQueryBuilder<User>()
+    .expand('company/address', {
+        orders: { top: 10, orderBy: [{ field: 'date', orderDirection: 'desc' }] },
+    })
+    .toQuery();
+// ?$expand=company/address, orders($top=10;$orderby=date desc)
 ```
+
+**Subquery options**: `select`, `filter`, `orderBy`, `top`, `skip`, `count`, `search`, `expand`
 
 ### orderBy
 

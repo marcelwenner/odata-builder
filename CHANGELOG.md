@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Subquery support for `expand()`** with full OData system query options
+
+    - Supports `$select`, `$filter`, `$orderby`, `$top`, `$skip`, `$count`, `$search`, and nested `$expand`
+    - Mix simple string paths and subquery objects in a single call
+    - Deeply nested expand with recursive subquery options
+    - New exported types: `ExpandInput`, `ExpandSubQueryOptions`, `ExpandWithSubQuery`, `TopLevelExpandFields`
+
+    ```typescript
+    builder.expand({
+        orders: {
+            select: ['id', 'total'],
+            filter: f => f.where(x => x.total.gt(100)),
+            top: 5,
+            expand: [{ items: { select: ['name', 'price'] } }],
+        },
+    });
+    // $expand=orders($select=id, total;$filter=total gt 100;$top=5;$expand=items($select=name, price))
+    ```
+
 ## [1.0.0] - 2025-12-20
 
 ### Added
