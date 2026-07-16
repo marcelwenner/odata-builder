@@ -38,31 +38,18 @@ jobs:
             
             Thank you for using odata-builder! 📦
           
-          # Stale PR settings  
+          # Stale PR settings
           stale-pr-message: |
             👋 This pull request has been automatically marked as stale because it has not had recent activity.
-            
-            **What happens next?**
-            - Please update your PR or add a comment if you're still working on this
-            - If no activity occurs within 7 days, this PR will be automatically closed
-            - You can always reopen closed PRs if needed
-            
+
+            This is just a gentle nudge: **this PR will not be closed automatically**. A maintainer will review it. Feel free to add a comment or update the PR in the meantime.
+
             Thank you for your contribution to odata-builder! 🚀
-          
-          close-pr-message: |
-            🤖 This pull request has been automatically closed due to inactivity.
-            
-            **Don't worry!** You can:
-            - Reopen this PR if you're still working on it
-            - Create a new PR with updated changes
-            - Reference this PR in future work
-            
-            Thank you for contributing to odata-builder! 📦
-          
+
           # Timing settings
           days-before-stale: 30        # Mark as stale after 30 days
-          days-before-close: 7         # Close 7 days after marking stale
-          days-before-pr-close: 7      # Close PRs 7 days after marking stale
+          days-before-close: 7         # Close issues 7 days after marking stale
+          days-before-pr-close: -1     # Never auto-close PRs
           
           # Label settings
           stale-issue-label: 'status: stale'
@@ -70,7 +57,7 @@ jobs:
           
           # Exempt settings
           exempt-issue-labels: 'pinned,security,enhancement,bug'
-          exempt-pr-labels: 'pinned,security,work-in-progress'
+          exempt-pr-labels: 'pinned,security,work-in-progress,community,needs-review'
           
           # Only process a limited number to avoid rate limits
           operations-per-run: 50

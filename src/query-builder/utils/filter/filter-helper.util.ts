@@ -1,24 +1,11 @@
 import { Guid } from '../../types/utils/util.types';
 
 export const operatorTypeMap: Record<string, string[]> = {
-    string: [
-        'eq',
-        'ne',
-        'gt',
-        'ge',
-        'lt',
-        'le',
-        'contains',
-        'startswith',
-        'endswith',
-        'substringof',
-        'indexof',
-        'concat',
-    ],
+    string: ['eq', 'ne', 'gt', 'ge', 'lt', 'le'],
     number: ['eq', 'ne', 'lt', 'le', 'gt', 'ge'],
     boolean: ['eq', 'ne'],
     Date: ['eq', 'ne', 'lt', 'le', 'gt', 'ge'],
-    Guid: ['eq', 'ne'],
+    Guid: ['eq', 'ne', 'gt', 'ge', 'lt', 'le'],
     null: ['eq', 'ne'],
 };
 

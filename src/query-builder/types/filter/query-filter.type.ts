@@ -67,6 +67,7 @@ export interface InFilter {
     field: string;
     operator: 'in';
     values: InFilterValue[];
+    removeQuotes?: boolean;
 }
 
 export type InFilterValue = string | number | boolean | Date | Guid | null;

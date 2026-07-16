@@ -5,7 +5,6 @@ import {
     LambdaFilterFields,
     FilterOperators,
     ArithmeticFunctionDefinition,
-    GeneralFilterOperators,
 } from './query-filter.type';
 import { Guid } from '../utils/util.types';
 
@@ -257,9 +256,9 @@ describe('LambdaFilterFields<T, VALUETYPE>', () => {
 
 describe('FilterOperators<VALUETYPE>', () => {
     it('should allow string operators for string values', () => {
-        expectTypeOf<
-            FilterOperators<string>
-        >().toEqualTypeOf<GeneralFilterOperators>();
+        expectTypeOf<FilterOperators<string>>().toEqualTypeOf<
+            'eq' | 'ne' | 'ge' | 'gt' | 'le' | 'lt'
+        >();
     });
 
     it('should allow number operators for number values', () => {

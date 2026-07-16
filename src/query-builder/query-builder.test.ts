@@ -1392,3 +1392,83 @@ describe('OdataQueryBuilder - Extended Integration and Edge Cases', () => {
         });
     });
 });
+
+describe('OData v4.01 spec conformance', () => {
+    it('should emit $top=0', () => {
+        type Item = { x: string };
+        const query = new OdataQueryBuilder<Item>().top(0).toQuery();
+
+        expect(query).toBe('?$top=0');
+    });
+
+    it('should emit $skip=0', () => {
+        type Item = { x: string };
+        const query = new OdataQueryBuilder<Item>().skip(0).toQuery();
+
+        expect(query).toBe('?$skip=0');
+    });
+
+    it('should render guid comparisons unquoted with removeQuotes()', () => {
+        type Item = { id: Guid };
+        const query = new OdataQueryBuilder<Item>()
+            .filter(f =>
+                f.where(x =>
+                    x.id
+                        .removeQuotes()
+                        .eq('76b44f03-bb98-48eb-81fd-63007465a76d' as Guid),
+                ),
+            )
+            .toQuery();
+
+        expect(query).toBe(
+            '?$filter=id eq 76b44f03-bb98-48eb-81fd-63007465a76d',
+        );
+    });
+
+    it('should render guid in() unquoted with removeQuotes()', () => {
+        type Item = { id: Guid };
+        const query = new OdataQueryBuilder<Item>()
+            .filter(f =>
+                f.where(x =>
+                    x.id
+                        .removeQuotes()
+                        .in([
+                            '76b44f03-bb98-48eb-81fd-63007465a76d' as Guid,
+                        ]),
+                ),
+            )
+            .toQuery();
+
+        expect(query).toBe(
+            '?$filter=id in (76b44f03-bb98-48eb-81fd-63007465a76d)',
+        );
+    });
+
+    it('should quote guid-shaped strings in in() by default', () => {
+        type Item = { id: string };
+        const query = new OdataQueryBuilder<Item>()
+            .filter(f =>
+                f.where(x =>
+                    x.id.in(['76b44f03-bb98-48eb-81fd-63007465a76d']),
+                ),
+            )
+            .toQuery();
+
+        expect(query).toBe(
+            "?$filter=id in ('76b44f03-bb98-48eb-81fd-63007465a76d')",
+        );
+    });
+
+    it('should reject the legacy substringof operator', () => {
+        type Item = { x: string };
+        const queryBuilder = new OdataQueryBuilder<Item>();
+
+        expect(() =>
+            queryBuilder.filter({
+                field: 'x',
+                operator: 'substringof' as 'eq',
+                value: 'test',
+            }),
+        ).toThrow('Invalid operator');
+    });
+});
