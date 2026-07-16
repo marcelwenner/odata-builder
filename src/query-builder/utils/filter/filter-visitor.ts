@@ -8,7 +8,7 @@ import {
     isHasFilter,
     FilterRenderContext,
 } from './filter-utils';
-import { getValueType, isGuid, isValidOperator } from './filter-helper.util';
+import { getValueType, isValidOperator } from './filter-helper.util';
 import {
     ArithmeticFunctionDefinition,
     ArrayElement,
@@ -122,7 +122,7 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
                 'function' in filter && filter.function
                     ? this.processFunction(filter.function, filter.field)
                     : transformedField;
-            return `${leftSide} ${filter.operator} ${filter.value}`;
+            return `${leftSide} ${filter.operator} ${this.formatNumber(filter.value)}`;
         }
 
         if (typeof filter.value === 'boolean') {
@@ -285,8 +285,15 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
     }
 
     visitInFilter(filter: InFilter): string {
+        if (filter.values.length === 0) {
+            throw new Error(
+                `'in' filter requires at least one value. Field: '${String(filter.field)}'`,
+            );
+        }
         const field = String(filter.field);
-        const formattedValues = filter.values.map(v => this.formatInValue(v));
+        const formattedValues = filter.values.map(v =>
+            this.formatInValue(v, filter.removeQuotes),
+        );
 
         if (this.context.legacyInOperator) {
             // OData 4.0 fallback: (field eq v1 or field eq v2 or ...)
@@ -330,26 +337,37 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         return `${filter.field} has ${filter.value}`;
     }
 
-    private formatInValue(value: InFilterValue): string {
+    private formatInValue(
+        value: InFilterValue,
+        removeQuotes?: boolean,
+    ): string {
         if (value === null) {
             return 'null';
         }
         if (typeof value === 'string') {
-            if (isGuid(value)) {
-                return value;
-            }
             // Escape single quotes: O'Reilly → 'O''Reilly'
-            return `'${value.replace(/'/g, "''")}'`;
+            const escapedValue = value.replace(/'/g, "''");
+            return removeQuotes ? escapedValue : `'${escapedValue}'`;
         }
         if (value instanceof Date) {
             return value.toISOString();
         }
-        if (typeof value === 'number' || typeof value === 'boolean') {
+        if (typeof value === 'number') {
+            return this.formatNumber(value);
+        }
+        if (typeof value === 'boolean') {
             return String(value);
         }
         throw new Error(
             `Unsupported value type in 'in' filter: ${typeof value}`,
         );
+    }
+
+    private formatNumber(value: number): string {
+        if (Number.isNaN(value)) return 'NaN';
+        if (value === Infinity) return 'INF';
+        if (value === -Infinity) return '-INF';
+        return String(value);
     }
 
     private getTransformedField<U>(
@@ -374,6 +392,12 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         date: Date,
         transforms: DateTransform[],
     ): number {
+        if (transforms.length > 1) {
+            throw new Error(
+                'Only a single date transform is supported when the filter value is a Date ' +
+                    `(got: ${transforms.join(', ')}). Chained transforms like month(year(x)) are not valid OData.`,
+            );
+        }
         const dateTransforms: Record<DateTransform, (date: Date) => number> = {
             year: date => date.getUTCFullYear(),
             month: date => date.getUTCMonth() + 1,
@@ -404,11 +428,10 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
 
         switch (func.type) {
             case 'concat': {
-                const args = [
+                return func.values.reduce<string>(
+                    (acc, v) => `concat(${acc}, ${this.formatValue(v)})`,
                     field,
-                    ...func.values.map(v => this.formatValue(v)),
-                ];
-                return `concat(${args.join(', ')})`;
+                );
             }
             case 'contains':
                 return `contains(${field}, ${this.formatValue(func.value)})`;
@@ -494,8 +517,20 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         if (value instanceof Date) {
             return `${value.toISOString()}`;
         }
-        if (typeof value === 'number' || typeof value === 'boolean') {
+        if (typeof value === 'number') {
+            return this.formatNumber(value);
+        }
+        if (typeof value === 'boolean') {
             return String(value);
+        }
+        if (
+            typeof value === 'object' &&
+            value !== null &&
+            'fieldReference' in value
+        ) {
+            return String(
+                (value as { fieldReference: unknown }).fieldReference,
+            );
         }
         throw new Error(`Unsupported value type: ${typeof value}`);
     }

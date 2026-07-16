@@ -826,7 +826,9 @@ describe('ODataFilterVisitor Apostrophe Escaping', () => {
         };
 
         const result = visitor.visitBasicFilter(filter);
-        expect(result).toBe("concat(name, 'John''s', 'book') eq 'result'");
+        expect(result).toBe(
+            "concat(concat(name, 'John''s'), 'book') eq 'result'",
+        );
     });
 
     it('should escape apostrophes in combined filter', () => {
@@ -914,6 +916,134 @@ describe('ODataFilterVisitor Error Handling', () => {
         const result = visitor.visitCombinedFilter(filter);
         expect(result).toBe(
             '(createdAt gt 2024-06-01T00:00:00.000Z and isActive eq true)',
+        );
+    });
+});
+
+describe('ODataFilterVisitor OData v4.01 Literals', () => {
+    type ItemType = {
+        id: string;
+        name: string;
+        price: number;
+    };
+
+    const visitor = new ODataFilterVisitor<ItemType>();
+
+    it('should render guid-shaped strings quoted by default', () => {
+        const filter: QueryFilter<ItemType> = {
+            field: 'id',
+            operator: 'eq',
+            value: '76b44f03-bb98-48eb-81fd-63007465a76d',
+        };
+
+        expect(visitor.visitBasicFilter(filter)).toBe(
+            "id eq '76b44f03-bb98-48eb-81fd-63007465a76d'",
+        );
+    });
+
+    it('should render guid-shaped strings quoted by default in "in" filters', () => {
+        const filter: InFilter = {
+            field: 'id',
+            operator: 'in',
+            values: ['76b44f03-bb98-48eb-81fd-63007465a76d'],
+        };
+
+        expect(visitor.visitInFilter(filter)).toBe(
+            "id in ('76b44f03-bb98-48eb-81fd-63007465a76d')",
+        );
+    });
+
+    it('should render unquoted values in "in" filters with removeQuotes', () => {
+        const filter: InFilter = {
+            field: 'id',
+            operator: 'in',
+            values: ['76b44f03-bb98-48eb-81fd-63007465a76d'],
+            removeQuotes: true,
+        };
+
+        expect(visitor.visitInFilter(filter)).toBe(
+            'id in (76b44f03-bb98-48eb-81fd-63007465a76d)',
+        );
+    });
+
+    it.each([
+        [Infinity, 'price eq INF'],
+        [-Infinity, 'price eq -INF'],
+        [NaN, 'price eq NaN'],
+    ])(
+        'should render non-finite number %s as spec literal',
+        (value, expected) => {
+            const filter: QueryFilter<ItemType> = {
+                field: 'price',
+                operator: 'eq',
+                value,
+            };
+
+            expect(visitor.visitBasicFilter(filter)).toBe(expected);
+        },
+    );
+
+    it('should render non-finite numbers as spec literals in "in" filters', () => {
+        const filter: InFilter = {
+            field: 'price',
+            operator: 'in',
+            values: [Infinity, -Infinity, NaN, 1],
+        };
+
+        expect(visitor.visitInFilter(filter)).toBe(
+            'price in (INF, -INF, NaN, 1)',
+        );
+    });
+
+    it('should throw for "in" filter without values', () => {
+        const filter: InFilter = {
+            field: 'price',
+            operator: 'in',
+            values: [],
+        };
+
+        expect(() => visitor.visitInFilter(filter)).toThrow(
+            "'in' filter requires at least one value",
+        );
+    });
+
+    it('should nest concat calls for multiple values', () => {
+        const filter: QueryFilter<ItemType> = {
+            field: 'name',
+            operator: 'eq',
+            value: 'a b c',
+            function: { type: 'concat', values: [' ', 'c'] },
+        };
+
+        expect(visitor.visitBasicFilter(filter)).toBe(
+            "concat(concat(name, ' '), 'c') eq 'a b c'",
+        );
+    });
+
+    it('should render field references as property paths in function arguments', () => {
+        const filter: QueryFilter<ItemType> = {
+            field: 'name',
+            operator: 'eq',
+            value: true,
+            function: {
+                type: 'contains',
+                value: { fieldReference: 'id' },
+            },
+        };
+
+        expect(visitor.visitBasicFilter(filter)).toBe('contains(name, id)');
+    });
+
+    it('should throw for chained date transforms on a Date value', () => {
+        const filter = {
+            field: 'name',
+            operator: 'eq',
+            value: new Date('2024-03-15T10:30:00Z'),
+            transform: ['year', 'month'],
+        } as unknown as QueryFilter<ItemType>;
+
+        expect(() => visitor.visitBasicFilter(filter)).toThrow(
+            'Only a single date transform',
         );
     });
 });

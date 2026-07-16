@@ -15,8 +15,8 @@ describe('toTopQuery', () => {
         expect(result).toEqual(expectedQuery);
     });
 
-    it('should return empty string for zero', () => {
-        expect(toTopQuery(0)).toBe('');
+    it('should return $top=0 for zero', () => {
+        expect(toTopQuery(0)).toBe('$top=0');
     });
 
     it('should throw for negative numbers', () => {

@@ -125,7 +125,8 @@ export class OdataQueryBuilder<T> {
      * builder.top(10)  // $top=10
      */
     top(topCount: number): this {
-        if (!topCount || this.queryComponents.top) return this;
+        if (topCount == null || this.queryComponents.top !== undefined)
+            return this;
         if (topCount < 0) throw new Error('Invalid top count');
 
         this.queryComponents.top = topCount;
@@ -144,7 +145,8 @@ export class OdataQueryBuilder<T> {
      * builder.skip(20).top(10)  // $skip=20&$top=10 (page 3)
      */
     skip(skipCount: number): this {
-        if (!skipCount || this.queryComponents.skip) return this;
+        if (skipCount == null || this.queryComponents.skip !== undefined)
+            return this;
         if (skipCount < 0) throw new Error('Invalid skip count');
 
         this.queryComponents.skip = skipCount;
@@ -460,7 +462,7 @@ export class OdataQueryBuilder<T> {
         const queryStringParts: string[] = [];
 
         for (const [operator, component] of sortedEntries) {
-            if (!component) continue;
+            if (component == null) continue;
 
             const queryPart = queryGeneratorMap[
                 operator as keyof QueryComponents<T>

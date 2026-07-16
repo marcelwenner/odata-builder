@@ -43,11 +43,8 @@ describe('FieldProxy Mapping', () => {
             new FilterBuilder<User>().where(x => x.name.length().gt(1));
         });
 
-        it('does NOT have number ops', () => {
-            new FilterBuilder<User>().where(x => {
-                // @ts-expect-error - gt is not on string
-                return x.name.gt('test');
-            });
+        it('has comparison ops (v4.01 allows ordering on strings)', () => {
+            new FilterBuilder<User>().where(x => x.name.gt('test'));
         });
     });
 

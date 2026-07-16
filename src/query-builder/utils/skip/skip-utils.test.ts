@@ -15,8 +15,8 @@ describe('toSkipQuery', () => {
         expect(result).toBe(expectedQuery);
     });
 
-    it('should return empty string for zero', () => {
-        expect(toSkipQuery(0)).toBe('');
+    it('should return $skip=0 for zero', () => {
+        expect(toSkipQuery(0)).toBe('$skip=0');
     });
 
     it('should throw for negative numbers', () => {

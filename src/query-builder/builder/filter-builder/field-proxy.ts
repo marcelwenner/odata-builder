@@ -131,7 +131,7 @@ function createOperation<T>(
                             `Field: '${fieldPath}'`,
                     );
                 }
-                return createInFilterExpression<T>(fieldPath, values);
+                return createInFilterExpression<T>(fieldPath, values, context);
             };
 
         case 'has':
@@ -411,14 +411,21 @@ function createLambdaExpression<T>(
 function createInFilterExpression<T>(
     field: string,
     values: unknown[],
+    context: ProxyContext,
 ): FilterExpression<T> {
+    const filter: Record<string, unknown> = {
+        field,
+        operator: 'in',
+        values,
+    };
+
+    if (context.removeQuotes) {
+        filter['removeQuotes'] = true;
+    }
+
     return {
         _type: 'expression',
-        _filter: {
-            field,
-            operator: 'in',
-            values,
-        } as unknown as QueryFilter<T>,
+        _filter: filter as unknown as QueryFilter<T>,
     };
 }
 
