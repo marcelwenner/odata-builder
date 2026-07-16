@@ -72,23 +72,17 @@ describe('expand-util', () => {
         });
 
         it('should expand with $top subquery', () => {
-            const result = toExpandQuery<Entity>([
-                { orders: { top: 5 } },
-            ]);
+            const result = toExpandQuery<Entity>([{ orders: { top: 5 } }]);
             expect(result).toBe('$expand=orders($top=5)');
         });
 
         it('should expand with $skip subquery', () => {
-            const result = toExpandQuery<Entity>([
-                { orders: { skip: 10 } },
-            ]);
+            const result = toExpandQuery<Entity>([{ orders: { skip: 10 } }]);
             expect(result).toBe('$expand=orders($skip=10)');
         });
 
         it('should expand with $count subquery', () => {
-            const result = toExpandQuery<Entity>([
-                { orders: { count: true } },
-            ]);
+            const result = toExpandQuery<Entity>([{ orders: { count: true } }]);
             expect(result).toBe('$expand=orders($count=true)');
         });
 
@@ -154,9 +148,7 @@ describe('expand-util', () => {
                 'details',
                 { orders: { select: ['id'], top: 3 } },
             ]);
-            expect(result).toBe(
-                '$expand=details, orders($select=id;$top=3)',
-            );
+            expect(result).toBe('$expand=details, orders($select=id;$top=3)');
         });
 
         it('should support nested $expand subqueries', () => {
@@ -245,6 +237,34 @@ describe('expand-util', () => {
         it('should handle subquery with empty options as simple expand', () => {
             const result = toExpandQuery<Entity>([{ orders: {} }]);
             expect(result).toBe('$expand=orders');
+        });
+        it('should expand with $levels subquery', () => {
+            const result = toExpandQuery<Entity>([{ orders: { levels: 3 } }]);
+            expect(result).toBe('$expand=orders($levels=3)');
+        });
+
+        it('should expand with $levels=max subquery', () => {
+            const result = toExpandQuery<Entity>([
+                { orders: { levels: 'max' } },
+            ]);
+            expect(result).toBe('$expand=orders($levels=max)');
+        });
+
+        it('should throw for invalid $levels subquery', () => {
+            expect(() =>
+                toExpandQuery<Entity>([{ orders: { levels: 0 } }]),
+            ).toThrow('Invalid levels value');
+        });
+
+        it('should emit $top=0 in subquery', () => {
+            const result = toExpandQuery<Entity>([{ orders: { top: 0 } }]);
+            expect(result).toBe('$expand=orders($top=0)');
+        });
+
+        it('should throw for negative $top in subquery', () => {
+            expect(() =>
+                toExpandQuery<Entity>([{ orders: { top: -1 } }]),
+            ).toThrow('Invalid top count');
         });
     });
 });

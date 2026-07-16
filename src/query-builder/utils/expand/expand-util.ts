@@ -9,10 +9,7 @@ import { toSelectQuery } from '../select/select-utils';
 import { toOrderByQuery } from '../orderby/orderby-utils';
 import { toTopQuery } from '../top/top-utils';
 import { toSkipQuery } from '../skip/skip-utils';
-import {
-    toFilterQuery,
-    FilterRenderContext,
-} from '../filter/filter-utils';
+import { toFilterQuery, FilterRenderContext } from '../filter/filter-utils';
 import { FilterBuilder } from '../../builder/filter-builder/filter-builder';
 import { createSearchTerm } from '../search/search.utils';
 
@@ -59,12 +56,24 @@ function renderSubQuery<T>(
         if (orderByStr) parts.push(orderByStr);
     }
 
-    if (options.top !== undefined && options.top > 0) {
-        parts.push(toTopQuery(options.top));
+    if (options.top !== undefined) {
+        const topStr = toTopQuery(options.top);
+        if (topStr) parts.push(topStr);
     }
 
-    if (options.skip !== undefined && options.skip > 0) {
-        parts.push(toSkipQuery(options.skip));
+    if (options.skip !== undefined) {
+        const skipStr = toSkipQuery(options.skip);
+        if (skipStr) parts.push(skipStr);
+    }
+
+    if (options.levels !== undefined) {
+        if (
+            options.levels !== 'max' &&
+            (!Number.isInteger(options.levels) || options.levels < 1)
+        ) {
+            throw new Error('Invalid levels value');
+        }
+        parts.push(`$levels=${options.levels}`);
     }
 
     if (options.count === true) {

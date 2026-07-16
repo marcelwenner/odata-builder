@@ -56,10 +56,11 @@ export type UnwrapArray<T> = T extends readonly (infer U)[] ? U : T;
  * Checks if a type represents an expandable navigation property:
  * either a plain object or an array of objects.
  */
-export type IsExpandableType<T> = IsObjectType<T> extends true
-    ? true
-    : T extends readonly (infer U)[]
-      ? IsObjectType<NonNullable<U>> extends true
-          ? true
-          : false
-      : false;
+export type IsExpandableType<T> =
+    IsObjectType<T> extends true
+        ? true
+        : T extends readonly (infer U)[]
+          ? IsObjectType<NonNullable<U>> extends true
+              ? true
+              : false
+          : false;

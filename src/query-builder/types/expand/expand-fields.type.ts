@@ -1,4 +1,9 @@
-import { HasKeys, IsExpandableType, PrevDepth, UnwrapArray } from '../utils/util.types';
+import {
+    HasKeys,
+    IsExpandableType,
+    PrevDepth,
+    UnwrapArray,
+} from '../utils/util.types';
 
 export type ExpandFields<T, Depth extends number = 5> = Depth extends 0
     ? never

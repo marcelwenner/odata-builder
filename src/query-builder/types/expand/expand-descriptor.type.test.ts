@@ -50,7 +50,9 @@ describe('TopLevelExpandFields<T>', () => {
 
     it('should not include primitive fields', () => {
         type OnlyPrimitives = { name: string; count: number };
-        expectTypeOf<TopLevelExpandFields<OnlyPrimitives>>().toEqualTypeOf<never>();
+        expectTypeOf<
+            TopLevelExpandFields<OnlyPrimitives>
+        >().toEqualTypeOf<never>();
     });
 
     it('should handle nested objects', () => {

@@ -38,12 +38,11 @@ export type TopLevelExpandFields<T> = {
  */
 export interface ExpandSubQueryOptions<T> {
     select?: SelectFields<Required<T>>[];
-    filter?: (
-        f: FilterBuilder<Required<T>>,
-    ) => FilterBuilder<Required<T>>;
+    filter?: (f: FilterBuilder<Required<T>>) => FilterBuilder<Required<T>>;
     orderBy?: OrderByDescriptor<Required<T>>[];
     top?: number;
     skip?: number;
+    levels?: number | 'max';
     count?: boolean;
     search?: string | SearchExpressionBuilder;
     expand?: ExpandInput<T>[];
