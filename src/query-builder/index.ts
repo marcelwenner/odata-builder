@@ -220,9 +220,7 @@ export class OdataQueryBuilder<T> {
     ): this {
         // Handle callback syntax: .filter(f => f.where(x => x.name.eq('John')))
         if (args.length === 1 && typeof args[0] === 'function') {
-            const callback = args[0] as (
-                f: FilterBuilder<Required<T>>,
-            ) => FilterBuilder<Required<T>>;
+            const callback = args[0];
             const builder = callback(new FilterBuilder<Required<T>>());
             const result = builder.build();
             if (result) {

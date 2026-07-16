@@ -103,7 +103,7 @@ describe('FieldProxy Mapping', () => {
         it('does NOT have comparison ops', () => {
             new FilterBuilder<User>().where(x => {
                 // @ts-expect-error - gt is not on guid
-                return x.id.gt('x' as Guid);
+                return x.id.gt('x');
             });
         });
     });

@@ -320,7 +320,7 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
         } else if (isLambdaFilter(innerFilter as QueryFilter<U>)) {
             innerQuery = this.visitLambdaFilter(innerFilter as QueryFilter<U>);
         } else if (isBasicFilter(innerFilter)) {
-            innerQuery = this.visitBasicFilter(innerFilter as QueryFilter<U>);
+            innerQuery = this.visitBasicFilter(innerFilter);
         } else {
             throw new Error(
                 `Invalid filter inside not(): ${JSON.stringify(innerFilter)}`,
@@ -529,7 +529,7 @@ export class ODataFilterVisitor<T> implements FilterVisitor<T> {
             'fieldReference' in value
         ) {
             return String(
-                (value as { fieldReference: unknown }).fieldReference,
+                (value).fieldReference,
             );
         }
         throw new Error(`Unsupported value type: ${typeof value}`);

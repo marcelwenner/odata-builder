@@ -148,7 +148,7 @@ function createOperation<T>(
             return (value: string) =>
                 createBooleanPredicateExpression<T>(
                     fieldPath,
-                    { type: operation, value } as FunctionDefinition,
+                    { type: operation, value },
                     context,
                 );
 
@@ -174,11 +174,7 @@ function createOperation<T>(
                 const func: FunctionDefinition = { type: 'substring', start };
                 if (length !== undefined) {
                     (
-                        func as {
-                            type: 'substring';
-                            start: number;
-                            length?: number;
-                        }
+                        func
                     ).length = length;
                 }
                 return createFieldProxy<T>({
