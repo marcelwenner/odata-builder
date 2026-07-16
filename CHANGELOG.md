@@ -5,12 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-16
 
 ### Added
 
 - **Subquery support for `expand()`** with full OData system query options
-
     - Supports `$select`, `$filter`, `$orderby`, `$top`, `$skip`, `$count`, `$search`, and nested `$expand`
     - Mix simple string paths and subquery objects in a single call
     - Deeply nested expand with recursive subquery options
@@ -28,12 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     // $expand=orders($select=id, total;$filter=total gt 100;$top=5;$expand=items($select=name, price))
     ```
 
+- `$levels` subquery option for `expand()` (`levels: 3` or `levels: 'max'`)
+- `INF`, `-INF` and `NaN` literals for non-finite numbers (OData v4.01 URL Conventions 5.1.1.14.1)
+- Field references (`{ fieldReference: '...' }`) render as property paths in function arguments, enabling field-to-field comparisons like `contains(name, id)`
+
+### Changed
+
+- **GUID quoting is now always explicit**: `in()` no longer auto-unquotes GUID-formatted strings (values are quoted by default, like everywhere else). Use `removeQuotes()` (fluent) or `removeQuotes: true` (object syntax) for `Edm.Guid` properties; this now works for `in` filters too. Rationale: `Edm.Guid` properties need unquoted literals (URL Conventions 5.1.1.14.1), but `Edm.String` properties containing GUID-formatted values need quotes, and the runtime cannot tell them apart.
+- Ordering operators (`gt`/`ge`/`lt`/`le`) are now accepted for GUID values (URL Conventions 5.1.1.1.3 allows them for all primitives except binary/stream/geo)
+- `concat()` with multiple values now nests binary calls (`concat(concat(name, ' '), 'x')`), because the OData `concat` function takes exactly two arguments (5.1.1.5.1)
+- `top(0)` / `skip(0)` are now emitted as `$top=0` / `$skip=0` instead of being dropped; `$top=0` is a valid query that returns no items (5.1.6)
+
+### Fixed
+
+- Legacy OData v2 operator `substringof` (and function names) no longer accepted as infix operators in object-syntax filters; they rendered invalid queries like `name substringof 'x'`
+- Empty `in` filters via object syntax now throw instead of rendering invalid `field in ()`
+- Chained date transforms on a `Date` value (e.g. `transform: ['year', 'month']`) now throw instead of silently producing wrong values
+- Negative `top`/`skip` in expand subqueries now throw (consistent with top-level behavior)
+
 ## [1.0.0] - 2025-12-20
 
 ### Added
 
 - **Nested property paths for `select()`** with full IntelliSense support
-
     - Type-safe selection of nested properties using `/` separator
     - Consistent with `orderBy()` and `expand()` APIs
 
@@ -43,7 +59,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     ```
 
 - **`in` operator** for membership testing (OData 4.01)
-
     - Supports strings, numbers, booleans, dates, and GUIDs
     - Proper escaping for special characters (e.g., `O'Reilly` → `'O''Reilly'`)
     - Legacy mode for OData 4.0 servers via `legacyInOperator` option
@@ -61,7 +76,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     ```
 
 - **`not` operator** for filter negation
-
     - Negates any filter expression with correct precedence
     - Chainable for complex filter compositions
 
@@ -71,7 +85,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     ```
 
 - **`has` operator** for enum flag checking
-
     - Raw passthrough of enum literals for maximum server compatibility
     - Works with namespace-qualified enum values
 
@@ -81,7 +94,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     ```
 
 - **Fluent FilterBuilder API** with type-safe field access
-
     - Full IntelliSense support for all field operations
     - String operations: `contains`, `startswith`, `endswith`, `tolower`, `toupper`, `trim`
     - Number operations: `add`, `sub`, `mul`, `div`, `mod`, `round`, `floor`, `ceiling`

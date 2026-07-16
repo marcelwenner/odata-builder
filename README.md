@@ -7,15 +7,15 @@ Generate Typesafe OData Queries with Ease. odata-builder ensures your queries ar
 
 > **What you get**
 >
-> -   Fully type-safe OData v4.01 query generation
-> -   Compile-time validation for filters and search expressions
-> -   Fluent builder and serializable object syntax
+> - Fully type-safe OData v4.01 query generation
+> - Compile-time validation for filters and search expressions
+> - Fluent builder and serializable object syntax
 >
 > **What you need to know**
 >
-> -   `in()` requires OData 4.01 (legacy fallback available)
-> -   `has()` requires a valid OData enum literal (raw passthrough)
-> -   Server support for `not` may vary
+> - `in()` requires OData 4.01 (legacy fallback available)
+> - `has()` requires a valid OData enum literal (raw passthrough)
+> - Server support for `not` may vary
 
 ## Install
 
@@ -341,11 +341,13 @@ new OdataQueryBuilder<User>()
     .expand({
         company: {
             select: ['name'],
-            expand: [{
-                address: {
-                    select: ['city', 'zip'],
+            expand: [
+                {
+                    address: {
+                        select: ['city', 'zip'],
+                    },
                 },
-            }],
+            ],
         },
     })
     .toQuery();
@@ -354,13 +356,16 @@ new OdataQueryBuilder<User>()
 // Mix simple and subquery expands
 new OdataQueryBuilder<User>()
     .expand('company/address', {
-        orders: { top: 10, orderBy: [{ field: 'date', orderDirection: 'desc' }] },
+        orders: {
+            top: 10,
+            orderBy: [{ field: 'date', orderDirection: 'desc' }],
+        },
     })
     .toQuery();
 // ?$expand=company/address, orders($top=10;$orderby=date desc)
 ```
 
-**Subquery options**: `select`, `filter`, `orderBy`, `top`, `skip`, `count`, `search`, `expand`
+**Subquery options**: `select`, `filter`, `orderBy`, `top`, `skip`, `levels`, `count`, `search`, `expand`
 
 ### orderBy
 
@@ -400,6 +405,8 @@ new OdataQueryBuilder<User>().count(true).toQuery();
 
 ## GUID Handling
 
+Whether a GUID-formatted value must be sent quoted or unquoted depends on the backend property type: `Edm.Guid` literals are unquoted per spec ([URL Conventions, 5.1.1.14.1](https://docs.oasis-open.org/odata/odata/v4.01/odata-v4.01-part2-url-conventions.html)), while `Edm.String` properties that happen to contain GUID-formatted values need quotes. TypeScript types are erased at runtime, so the builder cannot detect this. Quoting is therefore always explicit:
+
 ```typescript
 import { Guid, OdataQueryBuilder } from 'odata-builder';
 
@@ -407,28 +414,105 @@ interface Entity {
     id: Guid;
 }
 
+// Edm.Guid property: use removeQuotes()
 new OdataQueryBuilder<Entity>()
-    .filter({
-        field: 'id',
-        operator: 'eq',
-        value: 'f92477a9-5761-485a-b7cd-30561e2f888b',
-        removeQuotes: true,
-    })
+    .filter(f =>
+        f.where(x =>
+            x.id
+                .removeQuotes()
+                .eq('f92477a9-5761-485a-b7cd-30561e2f888b' as Guid),
+        ),
+    )
     .toQuery();
 // ?$filter=id eq f92477a9-5761-485a-b7cd-30561e2f888b
+
+// Works for in() as well
+new OdataQueryBuilder<Entity>()
+    .filter(f => f.where(x => x.id.removeQuotes().in(['f92477a9-...' as Guid])))
+    .toQuery();
+// ?$filter=id in (f92477a9-...)
 ```
 
-> Most OData servers accept GUIDs without quotes. If your server requires quoted GUIDs, omit `removeQuotes`.
+Without `removeQuotes` (or `removeQuotes: true` in object syntax), string values are always quoted, which is the safe default for `Edm.String` properties.
+
+---
+
+## OData v4.01 Spec Coverage
+
+Coverage of [OData v4.01 Part 2: URL Conventions](https://docs.oasis-open.org/odata/odata/v4.01/odata-v4.01-part2-url-conventions.html), audited per chapter. "Spec" columns reference section numbers of that document.
+
+### System query options
+
+| Query option                          | Spec        | Status          | Notes                                                                                                                             |
+| ------------------------------------- | ----------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `$filter`                             | 5.1.2       | ✅              | Fluent `FilterBuilder` + object syntax                                                                                            |
+| `$expand`                             | 5.1.3       | ✅              | Nested paths and subqueries (`$select`, `$filter`, `$orderby`, `$top`, `$skip`, `$levels`, `$count`, `$search`, nested `$expand`) |
+| `$select`                             | 5.1.4       | ✅              | Nested paths via `/`                                                                                                              |
+| `$orderby`                            | 5.1.5       | ✅              | Multiple fields, `asc`/`desc`, nested paths                                                                                       |
+| `$top` / `$skip`                      | 5.1.6       | ✅              | `$top=0` is emitted (returns no items)                                                                                            |
+| `$count`                              | 5.1.7       | ✅              | Both `$count=true` and the `/$count` path segment (4.8)                                                                           |
+| `$search`                             | 5.1.8       | ✅              | Terms, phrases, `AND`/`OR`/`NOT`, grouping via `SearchExpressionBuilder`                                                          |
+| `$compute`                            | 5.1.10      | ❌ Out of scope |                                                                                                                                   |
+| `$apply`                              | n/a         | ❌ Out of scope | Part of the separate OASIS Data Aggregation extension, not of the URL Conventions                                                 |
+| `$format`, `$index`, `$schemaversion` | 5.1.9/11/12 | ❌ Out of scope | Server/transport concerns, set them on the URL yourself                                                                           |
+
+### $filter operators
+
+| Feature                   | Spec                  | Status | Notes                                                                  |
+| ------------------------- | --------------------- | ------ | ---------------------------------------------------------------------- |
+| `eq ne gt ge lt le`       | 5.1.1.1.1–6           | ✅     | Ordering operators also allowed on strings (v4.01)                     |
+| `and` / `or` + precedence | 5.1.1.1.7–8, 5.1.1.17 | ✅     | `and` binds stronger than `or`; use `group()` for explicit grouping    |
+| `not`                     | 5.1.1.1.9             | ✅     | Always parenthesized                                                   |
+| `has`                     | 5.1.1.1.10            | ✅     | Enum literal passed through verbatim                                   |
+| `in`                      | 5.1.1.1.11            | ✅     | v4.01 syntax; `legacyInOperator` renders an `or`-chain for 4.0 servers |
+| `add sub mul div mod`     | 5.1.1.2               | ✅     | Via arithmetic chaining on number fields                               |
+| `divby`                   | 5.1.1.2.5             | ❌     | v4.01 decimal division not exposed                                     |
+| Unary negation (`-x`)     | 5.1.1.2.3             | ❌     | Negate the literal instead                                             |
+
+### Canonical functions
+
+| Feature                                                                     | Spec      | Status          | Notes                                                           |
+| --------------------------------------------------------------------------- | --------- | --------------- | --------------------------------------------------------------- |
+| `concat contains endswith indexof length startswith substring`              | 5.1.1.5   | ✅              | `concat` with multiple values nests binary calls                |
+| `tolower toupper trim`                                                      | 5.1.1.7   | ✅              | Chainable transforms                                            |
+| `matchesPattern`                                                            | 5.1.1.7.1 | ❌              |                                                                 |
+| `year month day hour minute second date time now`                           | 5.1.1.8   | ✅              |                                                                 |
+| `fractionalseconds totalseconds totaloffsetminutes mindatetime maxdatetime` | 5.1.1.8   | ❌              |                                                                 |
+| `round floor ceiling`                                                       | 5.1.1.9   | ✅              |                                                                 |
+| `cast` / `isof`                                                             | 5.1.1.10  | ❌ Out of scope |                                                                 |
+| `hassubset` / `hassubsequence`                                              | 5.1.1.6   | ❌              |                                                                 |
+| Geo functions                                                               | 5.1.1.11  | ❌ Out of scope |                                                                 |
+| `case`                                                                      | 5.1.1.12  | ❌              |                                                                 |
+| `any` / `all` lambdas                                                       | 5.1.1.13  | ✅              | Nested lambdas supported; parameters are auto-named `s`, `t`, … |
+
+### Literals
+
+| Feature                            | Spec         | Status     | Notes                                                                                                                     |
+| ---------------------------------- | ------------ | ---------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Strings (`''` escaping)            | 5.1.1.14.1   | ✅         | `O'Reilly` → `'O''Reilly'`                                                                                                |
+| GUIDs (unquoted)                   | 5.1.1.14.1   | ✅         | Explicit via `removeQuotes()`; default is quoted because `Edm.Guid` vs. GUID-in-`Edm.String` is not detectable at runtime |
+| `Edm.DateTimeOffset`               | 5.1.1.14.1   | ✅         | ISO 8601 via `Date.toISOString()`                                                                                         |
+| Numbers incl. `INF`, `-INF`, `NaN` | 5.1.1.14.1   | ✅         |                                                                                                                           |
+| `null`                             | 5.1.1.14.3   | ✅         |                                                                                                                           |
+| Enums                              | 5.1.1.14.1   | ⚠️ Partial | Via `has` or `removeQuotes`; no dedicated enum type                                                                       |
+| Duration / binary literals         | 5.1.1.14.1   | ❌         |                                                                                                                           |
+| Collections in `in (...)`          | 5.1.1.14.2   | ✅         |                                                                                                                           |
+| `$it`, `$root`, `$this`            | 5.1.1.14.4–6 | ❌         | Lambda parameters are generated (`s`, `t`, …)                                                                             |
+| Parameter aliases (`@p`)           | 5.1.1.15     | ❌         |                                                                                                                           |
+
+### URL encoding boundary
+
+The builder emits a **readable** query string: spaces and quotes inside expression values are not percent-encoded (`$search` is the one exception, it is fully encoded). Pass the result through `new URL(...)`, your HTTP client, or `encodeURI` before sending it raw over the wire. All common clients (fetch, axios, Angular HttpClient) handle this automatically.
 
 ---
 
 ## Server Compatibility
 
-| Feature        | OData Version | Notes                          |
-| -------------- | ------------- | ------------------------------ |
-| `in` operator  | 4.01          | Use `legacyInOperator` for 4.0 |
+| Feature        | OData Version | Notes                             |
+| -------------- | ------------- | --------------------------------- |
+| `in` operator  | 4.01          | Use `legacyInOperator` for 4.0    |
 | `not` operator | 4.0+          | Some servers have limited support |
-| `has` operator | 4.0+          | Requires correct enum literal  |
+| `has` operator | 4.0+          | Requires correct enum literal     |
 
 Check your server's `$metadata` endpoint or try a feature probe query. If `in` returns 400, switch to legacy mode.
 
@@ -436,10 +520,10 @@ Check your server's `$metadata` endpoint or try a feature probe query. If `in` r
 
 ## Design Principles
 
--   Type safety over runtime validation
--   Explicit over implicit behavior
--   Server compatibility over clever syntax
--   No hidden query rewriting
+- Type safety over runtime validation
+- Explicit over implicit behavior
+- Server compatibility over clever syntax
+- No hidden query rewriting
 
 ---
 
